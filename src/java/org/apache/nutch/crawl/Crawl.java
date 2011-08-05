@@ -59,7 +59,7 @@ public class Crawl extends Configured implements Tool {
   public int run(String[] args) throws Exception {
     if (args.length < 1) {
       System.out.println
-      ("Usage: Crawl <urlDir> -solr <solrURL> [-dir d] [-threads n] [-depth i] [-topN N]");
+      ("Usage: Crawl <urlDir> -solr <solrURL> [-dir d] [-threads n] [-depth i] [-topN N] [-numFetchers Map-Task-Capacity]");
       return -1;
     }
     Path rootUrlDir = null;
@@ -67,6 +67,7 @@ public class Crawl extends Configured implements Tool {
     int threads = getConf().getInt("fetcher.threads.fetch", 10);
     int depth = 5;
     long topN = Long.MAX_VALUE;
+    int numFetchers = -1;
     String solrUrl = null;
     
     for (int i = 0; i < args.length; i++) {
@@ -85,6 +86,9 @@ public class Crawl extends Configured implements Tool {
       } else if ("-solr".equals(args[i])) {
         solrUrl = StringUtils.lowerCase(args[i + 1]);
         i++;
+      } else if ("-numFetchers".equals(args[i])) {
+          numFetchers = Integer.parseInt(args[i+1]);
+          i++;
       } else if (args[i] != null) {
         rootUrlDir = new Path(args[i]);
       }
@@ -126,7 +130,7 @@ public class Crawl extends Configured implements Tool {
     injector.inject(crawlDb, rootUrlDir);
     int i;
     for (i = 0; i < depth; i++) {             // generate new segment
-      Path[] segs = generator.generate(crawlDb, segments, -1, topN, System
+      Path[] segs = generator.generate(crawlDb, segments, numFetchers, topN, System
           .currentTimeMillis());
       if (segs == null) {
         LOG.info("Stopping at depth=" + i + " - no more URLs to fetch.");
