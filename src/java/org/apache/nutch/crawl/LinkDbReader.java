@@ -20,8 +20,8 @@ package org.apache.nutch.crawl;
 import java.io.IOException;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.io.*;
@@ -37,10 +37,11 @@ import org.apache.nutch.util.TimingUtil;
 
 import java.text.SimpleDateFormat;
 import java.util.Iterator;
+import java.io.Closeable;
 
 /** . */
 public class LinkDbReader extends Configured implements Tool, Closeable {
-  public static final Log LOG = LogFactory.getLog(LinkDbReader.class);
+  public static final Logger LOG = LoggerFactory.getLogger(LinkDbReader.class);
 
   private static final Partitioner<WritableComparable, Writable> PARTITIONER = new HashPartitioner<WritableComparable, Writable>();
 
@@ -123,7 +124,7 @@ public class LinkDbReader extends Configured implements Tool, Closeable {
   
   public int run(String[] args) throws Exception {
     if (args.length < 2) {
-      System.err.println("Usage: LinkDbReader <linkdb> {-dump <out_dir> | -url <url>)");
+      System.err.println("Usage: LinkDbReader <linkdb> (-dump <out_dir> | -url <url>)");
       System.err.println("\t-dump <out_dir>\tdump whole link db to a text file in <out_dir>");
       System.err.println("\t-url <url>\tprint information about <url> to System.out");
       return -1;
@@ -149,7 +150,7 @@ public class LinkDbReader extends Configured implements Tool, Closeable {
         return -1;
       }
     } catch (Exception e) {
-      LOG.fatal("LinkDbReader: " + StringUtils.stringifyException(e));
+      LOG.error("LinkDbReader: " + StringUtils.stringifyException(e));
       return -1;
     }
   }

@@ -21,8 +21,8 @@ import java.net.MalformedURLException;
 import java.text.SimpleDateFormat;
 import java.util.Iterator;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.ByteWritable;
@@ -45,7 +45,6 @@ import org.apache.nutch.util.NutchJob;
 import org.apache.nutch.util.TimingUtil;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 
 /**
@@ -58,7 +57,7 @@ import org.apache.solr.client.solrj.request.UpdateRequest;
 */
 
 public class SolrClean implements Tool {
-  public static final Log LOG = LogFactory.getLog(SolrClean.class);
+  public static final Logger LOG = LoggerFactory.getLogger(SolrClean.class);
   private Configuration conf;
 
   @Override
@@ -97,11 +96,13 @@ public class SolrClean implements Tool {
     private int totalDeleted = 0;
     private SolrServer solr;
     private UpdateRequest updateRequest = new UpdateRequest();
+    private boolean noCommit = false;
 
     @Override
     public void configure(JobConf job) {
       try {
-        solr = new CommonsHttpSolrServer(job.get(SolrConstants.SERVER_URL));
+        solr = SolrUtils.getCommonsHttpSolrServer(job);
+        noCommit = job.getBoolean("noCommit", false);
       } catch (MalformedURLException e) {
         throw new RuntimeException(e);
       }
@@ -116,7 +117,7 @@ public class SolrClean implements Tool {
           totalDeleted += numDeletes;
         }
 
-        if (totalDeleted > 0) {
+        if (totalDeleted > 0 && !noCommit) {
           solr.commit();
         }
 
@@ -134,6 +135,7 @@ public class SolrClean implements Tool {
         Text document = values.next();
         updateRequest.deleteById(document.toString());
         numDeletes++;
+        reporter.incrCounter("SolrCleanStatus", "Deleted documents", 1);
         if (numDeletes >= NUM_MAX_DELETE_REQUEST) {
           try {
             LOG.info("SolrClean: deleting " + numDeletes + " documents");
@@ -149,7 +151,7 @@ public class SolrClean implements Tool {
     }
   }
 
-  public void delete(String crawldb, String solrUrl) throws IOException {
+  public void delete(String crawldb, String solrUrl, boolean noCommit) throws IOException {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     long start = System.currentTimeMillis();
     LOG.info("SolrClean: starting at " + sdf.format(start));
@@ -157,6 +159,7 @@ public class SolrClean implements Tool {
     JobConf job = new NutchJob(getConf());
 
     FileInputFormat.addInputPath(job, new Path(crawldb, CrawlDb.CURRENT_NAME));
+    job.setBoolean("noCommit", noCommit);
     job.set(SolrConstants.SERVER_URL, solrUrl);
     job.setInputFormat(SequenceFileInputFormat.class);
     job.setOutputFormat(NullOutputFormat.class);
@@ -172,12 +175,17 @@ public class SolrClean implements Tool {
   }
 
   public int run(String[] args) throws IOException {
-    if (args.length != 2) {
-      System.err.println("Usage: SolrClean <crawldb> <solrurl>");
+    if (args.length < 2) {
+      System.err.println("Usage: SolrClean <crawldb> <solrurl> [-noCommit]");
       return 1;
     }
 
-    delete(args[0], args[1]);
+    boolean noCommit = false;
+    if (args.length == 3 && args[2].equals("-noCommit")) {
+      noCommit = true;
+    }
+
+    delete(args[0], args[1], noCommit);
 
     return 0;
   }

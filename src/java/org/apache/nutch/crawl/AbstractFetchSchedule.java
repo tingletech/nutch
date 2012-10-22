@@ -17,8 +17,8 @@
 
 package org.apache.nutch.crawl;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.io.Text;
@@ -26,12 +26,12 @@ import org.apache.nutch.crawl.CrawlDatum;
 
 /**
  * This class provides common methods for implementations of
- * {@link FetchSchedule}.
+ * <code>FetchSchedule</code>.
  * 
  * @author Andrzej Bialecki
  */
 public abstract class AbstractFetchSchedule extends Configured implements FetchSchedule {
-  private static final Log LOG = LogFactory.getLog(AbstractFetchSchedule.class);
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractFetchSchedule.class);
   
   protected int defaultInterval;
   protected int maxInterval;
@@ -64,6 +64,7 @@ public abstract class AbstractFetchSchedule extends Configured implements FetchS
    * default <code>fetchInterval</code>.
    * 
    * @param url URL of the page.
+   *
    * @param datum datum instance to be initialized (modified in place).
    */
   public CrawlDatum initializeSchedule(Text url, CrawlDatum datum) {
@@ -91,12 +92,15 @@ public abstract class AbstractFetchSchedule extends Configured implements FetchS
    * marked as GONE. Default implementation increases fetchInterval by 50%,
    * and if it exceeds the <code>maxInterval</code> it calls
    * {@link #forceRefetch(Text, CrawlDatum, boolean)}.
-   * @param url URL of the page
-   * @param datum datum instance to be adjusted
+   *
+   * @param url URL of the page.
+   *
+   * @param datum datum instance to be adjusted.
+   *
    * @return adjusted page information, including all original information.
-   * NOTE: this may be a different instance than {@param datum}, but
+   * NOTE: this may be a different instance than @see CrawlDatum, but
    * implementations should make sure that it contains at least all
-   * information from {@param datum}.
+   * information from @see CrawlDatum.
    */
   public CrawlDatum setPageGoneSchedule(Text url, CrawlDatum datum,
           long prevFetchTime, long prevModifiedTime, long fetchTime) {
@@ -113,15 +117,21 @@ public abstract class AbstractFetchSchedule extends Configured implements FetchS
    * re-tried due to transient errors. The default implementation
    * sets the next fetch time 1 day in the future and increases
    * the retry counter.
-   * @param url URL of the page
-   * @param datum page information
-   * @param prevFetchTime previous fetch time
-   * @param prevModifiedTime previous modified time
-   * @param fetchTime current fetch time
+   *
+   * @param url URL of the page.
+   *
+   * @param datum page information.
+   *
+   * @param prevFetchTime previous fetch time.
+   *
+   * @param prevModifiedTime previous modified time.
+   *
+   * @param fetchTime current fetch time.
+   *
    * @return adjusted page information, including all original information.
-   * NOTE: this may be a different instance than {@param datum}, but
+   * NOTE: this may be a different instance than @see CrawlDatum, but
    * implementations should make sure that it contains at least all
-   * information from {@param datum}.
+   * information from @see CrawlDatum.
    */
   public CrawlDatum setPageRetrySchedule(Text url, CrawlDatum datum,
           long prevFetchTime, long prevModifiedTime, long fetchTime) {
@@ -144,13 +154,17 @@ public abstract class AbstractFetchSchedule extends Configured implements FetchS
    * guarantee that the page will be fetched, it just allows it to be
    * included in the further selection process based on scores. The default
    * implementation checks <code>fetchTime</code>, if it is higher than the
-   * {@param curTime} it returns false, and true otherwise. It will also
+   * <code>curTime</code> it returns false, and true otherwise. It will also
    * check that fetchTime is not too remote (more than <code>maxInterval</code>,
    * in which case it lowers the interval and returns true.
-   * @param url URL of the page
-   * @param datum datum instance
+   *
+   * @param url URL of the page.
+   *
+   * @param datum datum instance.
+   *
    * @param curTime reference time (usually set to the time when the
    * fetchlist generation process was started).
+   *
    * @return true, if the page should be considered for inclusion in the current
    * fetchlist, otherwise false.
    */
@@ -173,8 +187,11 @@ public abstract class AbstractFetchSchedule extends Configured implements FetchS
   /**
    * This method resets fetchTime, fetchInterval, modifiedTime,
    * retriesSinceFetch and page signature, so that it forces refetching.
-   * @param url URL of the page
-   * @param datum datum instance
+   *
+   * @param url URL of the page.
+   *
+   * @param datum datum instance.
+   *
    * @param asap if true, force refetch as soon as possible - this sets
    * the fetchTime to now. If false, force refetch whenever the next fetch
    * time is set.

@@ -22,8 +22,8 @@ import java.text.*;
 
 // Commons Logging imports
 import org.apache.commons.lang.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.conf.*;
@@ -40,7 +40,7 @@ import org.apache.nutch.util.NutchJob;
 import org.apache.nutch.fetcher.Fetcher;
 
 public class Crawl extends Configured implements Tool {
-  public static final Log LOG = LogFactory.getLog(Crawl.class);
+  public static final Logger LOG = LoggerFactory.getLogger(Crawl.class);
 
   private static String getDate() {
     return new SimpleDateFormat("yyyyMMddHHmmss").format
@@ -48,7 +48,8 @@ public class Crawl extends Configured implements Tool {
   }
 
 
-  /* Perform complete crawling and indexing given a set of root urls. */
+  /* Perform complete crawling and indexing (to Solr) given a set of root urls and the -solr
+     parameter respectively. More information and Usage parameters can be found below. */
   public static void main(String args[]) throws Exception {
     Configuration conf = NutchConfiguration.create();
     int res = ToolRunner.run(conf, new Crawl(), args);
@@ -84,7 +85,7 @@ public class Crawl extends Configured implements Tool {
           topN = Integer.parseInt(args[i+1]);
           i++;
       } else if ("-solr".equals(args[i])) {
-        solrUrl = StringUtils.lowerCase(args[i + 1]);
+        solrUrl = args[i + 1];
         i++;
       } else if ("-numFetchers".equals(args[i])) {
           numFetchers = Integer.parseInt(args[i+1]);
@@ -136,7 +137,7 @@ public class Crawl extends Configured implements Tool {
         LOG.info("Stopping at depth=" + i + " - no more URLs to fetch.");
         break;
       }
-      fetcher.fetch(segs[0], threads, org.apache.nutch.fetcher.Fetcher.isParsing(getConf()));  // fetch it
+      fetcher.fetch(segs[0], threads);  // fetch it
       if (!Fetcher.isParsing(job)) {
         parseSegment.parse(segs[0]);    // parse it, if needed
       }

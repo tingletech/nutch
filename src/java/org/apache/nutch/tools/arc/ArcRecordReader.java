@@ -20,8 +20,8 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.zip.GZIPInputStream;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -40,17 +40,17 @@ import org.apache.hadoop.util.StringUtils;
  * <p>Arc files are essentially tars of gzips.  Each record in an arc file is
  * a compressed gzip.  Multiple records are concatenated together to form a
  * complete arc.  For more information on the arc file format see
- * {@link http://www.archive.org/web/researcher/ArcFileFormat.php}.</p>
+ * {@link http://www.archive.org/web/researcher/ArcFileFormat.php } .</p>
  * 
  * <p>Arc files are used by the internet archive and grub projects.</p>
  * 
- * @see http://www.archive.org/
- * @see http://www.grub.org/
+ * see {@link http://www.archive.org/ }
+ * see {@link http://www.grub.org/ }
  */
 public class ArcRecordReader
   implements RecordReader<Text, BytesWritable> {
 
-  public static final Log LOG = LogFactory.getLog(ArcRecordReader.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ArcRecordReader.class);
 
   protected Configuration conf;
   protected long splitStart = 0;

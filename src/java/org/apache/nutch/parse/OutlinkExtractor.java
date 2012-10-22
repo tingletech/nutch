@@ -21,8 +21,8 @@ import java.net.MalformedURLException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.oro.text.regex.MatchResult;
@@ -48,7 +48,7 @@ import org.apache.oro.text.regex.Perl5Matcher;
  * @since 0.7
  */
 public class OutlinkExtractor {
-  private static final Log LOG = LogFactory.getLog(OutlinkExtractor.class);
+  private static final Logger LOG = LoggerFactory.getLogger(OutlinkExtractor.class);
 
   /**
    * Regex pattern to get URLs within a plain text.
@@ -143,6 +143,7 @@ public class OutlinkExtractor {
    * @return Array of <code>Outlink</code> s within found in plainText
    * @deprecated only for tests
    */
+  @Deprecated
   private Outlink[] getOutlinksJakartaRegexpImpl(final String plainText) {
 
     throw new UnsupportedOperationException(
@@ -200,6 +201,7 @@ public class OutlinkExtractor {
    * @return Array of <code>Outlink</code> s within found in plainText
    * @deprecated only for tests
    */
+  @Deprecated
   private Outlink[] getOutlinksJDK5Impl(final String plainText) {
 
     throw new UnsupportedOperationException(

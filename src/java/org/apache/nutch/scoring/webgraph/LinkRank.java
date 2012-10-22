@@ -34,8 +34,8 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.OptionBuilder;
 import org.apache.commons.cli.Options;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -72,7 +72,7 @@ public class LinkRank
   extends Configured
   implements Tool {
 
-  public static final Log LOG = LogFactory.getLog(LinkRank.class);
+  public static final Logger LOG = LoggerFactory.getLogger(LinkRank.class);
   private static final String NUM_NODES = "_num_nodes_";
 
   /**
@@ -105,6 +105,7 @@ public class LinkRank
     counter.setOutputValueClass(LongWritable.class);
     counter.setNumReduceTasks(1);
     counter.setOutputFormat(TextOutputFormat.class);
+    counter.setBoolean("mapreduce.fileoutputcommitter.marksuccessfuljobs", false);
 
     // run the counter job, outputs to a single reduce task and file
     LOG.info("Starting link counter job");
@@ -162,6 +163,7 @@ public class LinkRank
     initializer.setOutputKeyClass(Text.class);
     initializer.setOutputValueClass(Node.class);
     initializer.setOutputFormat(MapFileOutputFormat.class);
+    initializer.setBoolean("mapreduce.fileoutputcommitter.marksuccessfuljobs", false);
 
     // run the initializer
     LOG.info("Starting initialization job");
@@ -213,6 +215,7 @@ public class LinkRank
     inverter.setOutputKeyClass(Text.class);
     inverter.setOutputValueClass(LinkDatum.class);
     inverter.setOutputFormat(SequenceFileOutputFormat.class);
+    inverter.setBoolean("mapreduce.fileoutputcommitter.marksuccessfuljobs", false);
 
     // run the inverter job
     LOG.info("Starting inverter job");
@@ -262,6 +265,7 @@ public class LinkRank
     analyzer.setOutputKeyClass(Text.class);
     analyzer.setOutputValueClass(Node.class);
     analyzer.setOutputFormat(MapFileOutputFormat.class);
+    analyzer.setBoolean("mapreduce.fileoutputcommitter.marksuccessfuljobs", false);
 
     LOG.info("Starting analysis job");
     try {
@@ -398,6 +402,16 @@ public class LinkRank
         else if (obj instanceof LoopSet) {
           loops = (LoopSet)obj;
         }
+      }
+
+      // Check for the possibility of a LoopSet object without Node and LinkDatum objects. This can happen
+      // with webgraphs that receive deletes (e.g. link.delete.gone and/or URL filters or normalizers) but
+      // without an updated Loops database.
+      // See: https://issues.apache.org/jira/browse/NUTCH-1299
+      if (node == null && loops != null) {
+        // Nothing to do
+        LOG.warn("LoopSet without Node object received for " + key.toString() + " . You should either not use Loops as input of the LinkRank program or rerun the Loops program over the WebGraph.");
+        return;
       }
 
       // get the number of outlinks and the current inlink and outlink scores
@@ -537,8 +551,8 @@ public class LinkRank
       float linkRankScore = (1 - this.dampingFactor)
         + (this.dampingFactor * totalInlinkScore);
 
-      LOG.info(url + ": score: " + linkRankScore + " num inlinks: "
-        + numInlinks + " iteration: " + itNum + "\n");
+      LOG.debug(url + ": score: " + linkRankScore + " num inlinks: "
+        + numInlinks + " iteration: " + itNum);
 
       // store the score in a temporary NodeDb
       Node outNode = (Node)WritableUtils.clone(node, conf);
@@ -687,7 +701,7 @@ public class LinkRank
       return 0;
     }
     catch (Exception e) {
-      LOG.fatal("LinkAnalysis: " + StringUtils.stringifyException(e));
+      LOG.error("LinkAnalysis: " + StringUtils.stringifyException(e));
       return -2;
     }
   }

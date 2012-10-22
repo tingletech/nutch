@@ -33,8 +33,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileStatus;
@@ -43,7 +43,6 @@ import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.MapFile;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.io.Text;
-import org.apache.hadoop.io.UTF8;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableComparable;
 import org.apache.hadoop.mapred.FileInputFormat;
@@ -66,7 +65,6 @@ import org.apache.nutch.parse.ParseData;
 import org.apache.nutch.parse.ParseText;
 import org.apache.nutch.protocol.Content;
 import org.apache.nutch.util.HadoopFSUtil;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.NutchConfiguration;
 import org.apache.nutch.util.NutchJob;
 
@@ -74,7 +72,7 @@ import org.apache.nutch.util.NutchJob;
 public class SegmentReader extends Configured implements
     Reducer<Text, NutchWritable, Text, Text> {
 
-  public static final Log LOG = LogFactory.getLog(SegmentReader.class);
+  public static final Logger LOG = LoggerFactory.getLogger(SegmentReader.class);
 
   long recNo = 0L;
   
@@ -87,8 +85,9 @@ public class SegmentReader extends Configured implements
 
     public void map(WritableComparable key, Writable value,
         OutputCollector<Text, NutchWritable> collector, Reporter reporter) throws IOException {
-      // convert on the fly from old formats with UTF8 keys
-      if (key instanceof UTF8) {
+      // convert on the fly from old formats with UTF8 keys.
+      // UTF8 deprecated and replaced by Text.
+      if (key instanceof Text) {
         newKey.set(key.toString());
         key = newKey;
       }
@@ -138,7 +137,7 @@ public class SegmentReader extends Configured implements
     try {
       this.fs = FileSystem.get(getConf());
     } catch (IOException e) {
-      e.printStackTrace(LogUtil.getWarnStream(LOG));
+      LOG.error("IOException:", e);
     }
   }
 
@@ -153,7 +152,7 @@ public class SegmentReader extends Configured implements
     try {
       this.fs = FileSystem.get(getConf());
     } catch (IOException e) {
-      e.printStackTrace(LogUtil.getWarnStream(LOG));
+      LOG.error("IOException:", e);
     }
   }
 
@@ -253,7 +252,7 @@ public class SegmentReader extends Configured implements
         writer.close();
       }
     }
-    fs.delete(tempDir);
+    fs.delete(tempDir, true);
     if (LOG.isInfoEnabled()) { LOG.info("SegmentReader: done"); }
   }
 
@@ -295,7 +294,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getMapRecords(new Path(segment, Content.DIR_NAME), key);
           results.put("co", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -305,7 +304,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getMapRecords(new Path(segment, CrawlDatum.FETCH_DIR_NAME), key);
           results.put("fe", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -315,7 +314,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getSeqRecords(new Path(segment, CrawlDatum.GENERATE_DIR_NAME), key);
           results.put("ge", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -325,7 +324,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getSeqRecords(new Path(segment, CrawlDatum.PARSE_DIR_NAME), key);
           results.put("pa", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -335,7 +334,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getMapRecords(new Path(segment, ParseData.DIR_NAME), key);
           results.put("pd", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -345,7 +344,7 @@ public class SegmentReader extends Configured implements
           List<Writable> res = getMapRecords(new Path(segment, ParseText.DIR_NAME), key);
           results.put("pt", res);
         } catch (Exception e) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
+          LOG.error("Exception:", e);
         }
       }
     });
@@ -387,8 +386,15 @@ public class SegmentReader extends Configured implements
     Writable value = (Writable)valueClass.newInstance();
     // we don't know the partitioning schema
     for (int i = 0; i < readers.length; i++) {
-      if (readers[i].get(key, value) != null)
+      if (readers[i].get(key, value) != null) {
         res.add(value);
+        value = (Writable)valueClass.newInstance();
+        Text aKey = (Text) keyClass.newInstance();
+        while (readers[i].next(aKey, value) && aKey.equals(key)) {
+          res.add(value);
+          value = (Writable)valueClass.newInstance();
+        }
+      }
       readers[i].close();
     }
     return res;
@@ -405,8 +411,10 @@ public class SegmentReader extends Configured implements
     Writable value = (Writable)valueClass.newInstance();
     for (int i = 0; i < readers.length; i++) {
       while (readers[i].next(aKey, value)) {
-        if (aKey.equals(key))
+        if (aKey.equals(key)) {
           res.add(value);
+          value = (Writable)valueClass.newInstance();
+        }
       }
       readers[i].close();
     }
@@ -480,7 +488,7 @@ public class SegmentReader extends Configured implements
       stats.fetched = cnt;
     }
     Path parseDir = new Path(segment, ParseData.DIR_NAME);
-    if (fs.exists(fetchDir) && fs.getFileStatus(fetchDir).isDir()) {
+    if (fs.exists(parseDir) && fs.getFileStatus(parseDir).isDir()) {
       cnt = 0L;
       long errors = 0L;
       ParseData value = new ParseData();

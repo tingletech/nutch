@@ -28,8 +28,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.Vector;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.nutch.plugin.Extension;
 import org.apache.nutch.plugin.ExtensionPoint;
@@ -95,9 +95,10 @@ public final class URLNormalizers {
   public static final String SCOPE_INJECT = "inject";
   /** Scope used when constructing new {@link org.apache.nutch.parse.Outlink} instances. */
   public static final String SCOPE_OUTLINK = "outlink";
-  
+  /** Scope used when indexing URLs. */
+  public static final String SCOPE_INDEXER = "indexer";
 
-  public static final Log LOG = LogFactory.getLog(URLNormalizers.class);
+  public static final Logger LOG = LoggerFactory.getLogger(URLNormalizers.class);
 
   /* Empty extension list for caching purposes. */
   private final List<Extension> EMPTY_EXTENSION_LIST = Collections.EMPTY_LIST;
@@ -234,7 +235,7 @@ public final class URLNormalizers {
     String orderlist = conf.get("urlnormalizer.order." + scope);
     if (orderlist == null) orderlist = conf.get("urlnormalizer.order");
     if (orderlist != null && !orderlist.trim().equals("")) {
-      orders = orderlist.split("\\s+");
+      orders = orderlist.trim().split("\\s+");
     }
     String scopelist = conf.get("urlnormalizer.scope." + scope);
     Set<String> impls = null;

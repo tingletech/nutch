@@ -24,8 +24,8 @@ import java.text.SimpleDateFormat;
 import java.util.Iterator;
 import java.util.Date;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.Writable;
@@ -47,7 +47,6 @@ import org.apache.nutch.util.TimingUtil;
 import org.apache.solr.client.solrj.SolrQuery;
 import org.apache.solr.client.solrj.SolrServer;
 import org.apache.solr.client.solrj.SolrServerException;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
 import org.apache.solr.client.solrj.request.UpdateRequest;
 import org.apache.solr.client.solrj.response.QueryResponse;
 import org.apache.solr.common.SolrDocument;
@@ -78,7 +77,7 @@ import org.apache.solr.common.SolrDocumentList;
  * </li>
  * </ul>
  * 
- * Note that unlike {@link DeleteDuplicates} we assume that two documents in
+ * Note that unlike {@link DeleteDuplicate}s we assume that two documents in
  * a solr index will never have the same URL. So this class only deals with
  * documents with <b>different</b> URLs but the same digest. 
  */
@@ -86,9 +85,9 @@ public class SolrDeleteDuplicates
 implements Reducer<Text, SolrDeleteDuplicates.SolrRecord, Text, SolrDeleteDuplicates.SolrRecord>,
 Tool {
 
-  public static final Log LOG = LogFactory.getLog(SolrDeleteDuplicates.class);
+  public static final Logger LOG = LoggerFactory.getLogger(SolrDeleteDuplicates.class);
 
-  private static final String SOLR_GET_ALL_QUERY = SolrConstants.ID_FIELD + ":[* TO *]";
+  private static final String SOLR_GET_ALL_QUERY = "*:*";
 
   private static final int NUM_MAX_DELETE_REQUEST = 1000;
 
@@ -188,7 +187,7 @@ Tool {
 
     /** Return each index as a split. */
     public InputSplit[] getSplits(JobConf job, int numSplits) throws IOException {
-      SolrServer solr = new CommonsHttpSolrServer(job.get(SolrConstants.SERVER_URL));
+      SolrServer solr = SolrUtils.getCommonsHttpSolrServer(job);
 
       final SolrQuery solrQuery = new SolrQuery(SOLR_GET_ALL_QUERY);
       solrQuery.setFields(SolrConstants.ID_FIELD);
@@ -219,7 +218,7 @@ Tool {
         Reporter reporter)
         throws IOException {
 
-      SolrServer solr = new CommonsHttpSolrServer(job.get(SolrConstants.SERVER_URL));
+      SolrServer solr = SolrUtils.getCommonsHttpSolrServer(job);
       SolrInputSplit solrSplit = (SolrInputSplit) split;
       final int numDocs = solrSplit.getNumDocs();
       
@@ -282,6 +281,8 @@ Tool {
 
   private SolrServer solr;
 
+  private boolean noCommit = false;
+
   private int numDeletes = 0;
 
   private UpdateRequest updateRequest = new UpdateRequest();
@@ -296,7 +297,8 @@ Tool {
 
   public void configure(JobConf job) {
     try {
-      solr = new CommonsHttpSolrServer(job.get(SolrConstants.SERVER_URL));
+      solr = SolrUtils.getCommonsHttpSolrServer(job);
+      noCommit = job.getBoolean("noCommit", false);
     } catch (MalformedURLException e) {
       throw new RuntimeException(e);
     }
@@ -308,7 +310,10 @@ Tool {
       if (numDeletes > 0) {
         LOG.info("SolrDeleteDuplicates: deleting " + numDeletes + " duplicates");
         updateRequest.process(solr);
-        solr.commit();
+
+        if (!noCommit) {
+          solr.commit();
+        }
       }
     } catch (SolrServerException e) {
       throw new IOException(e);
@@ -330,6 +335,7 @@ Tool {
         updateRequest.deleteById(solrRecord.id);
       }
       numDeletes++;
+      reporter.incrCounter("SolrDedupStatus", "Deleted documents", 1);
       if (numDeletes >= NUM_MAX_DELETE_REQUEST) {
         try {
           LOG.info("SolrDeleteDuplicates: deleting " + numDeletes + " duplicates");
@@ -344,6 +350,10 @@ Tool {
   }
 
   public void dedup(String solrUrl) throws IOException {
+    dedup(solrUrl, false);
+  }
+
+  public void dedup(String solrUrl, boolean noCommit) throws IOException {
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     long start = System.currentTimeMillis();
     LOG.info("SolrDeleteDuplicates: starting at " + sdf.format(start));
@@ -352,6 +362,7 @@ Tool {
     JobConf job = new NutchJob(getConf());
 
     job.set(SolrConstants.SERVER_URL, solrUrl);
+    job.setBoolean("noCommit", noCommit);
     job.setInputFormat(SolrInputFormat.class);
     job.setOutputFormat(NullOutputFormat.class);
     job.setMapOutputKeyClass(Text.class);
@@ -366,12 +377,17 @@ Tool {
   }
 
   public int run(String[] args) throws IOException {
-    if (args.length != 1) {
-      System.err.println("Usage: SolrDeleteDuplicates <solr url>");
+    if (args.length < 1) {
+      System.err.println("Usage: SolrDeleteDuplicates <solr url> [-noCommit]");
       return 1;
     }
 
-    dedup(args[0]);
+    boolean noCommit = false;
+    if (args.length == 2 && args[1].equals("-noCommit")) {
+      noCommit = true;
+    }
+
+    dedup(args[0], noCommit);
     return 0;
   }
 

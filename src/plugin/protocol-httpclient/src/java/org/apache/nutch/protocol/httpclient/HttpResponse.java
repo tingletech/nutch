@@ -124,7 +124,7 @@ public class HttpResponse implements Response {
         int totalRead = 0;
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         while ((bufferFilled = in.read(buffer, 0, buffer.length)) != -1
-            && totalRead + bufferFilled < contentLength) {
+            && totalRead + bufferFilled <= contentLength) {
           totalRead += bufferFilled;
           out.write(buffer, 0, bufferFilled);
         }
@@ -170,9 +170,9 @@ public class HttpResponse implements Response {
         }
       }
 
-      // Log trace message
+      // Logger trace message
       if (Http.LOG.isTraceEnabled()) {
-        Http.LOG.trace(fetchTrace);
+        Http.LOG.trace(fetchTrace.toString());
       }
     } finally {
       get.releaseConnection();

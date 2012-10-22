@@ -21,14 +21,13 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.*;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.net.protocols.Response;
 import org.apache.nutch.parse.*;
 import org.apache.nutch.protocol.Content;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.NutchConfiguration;
 
 import org.apache.hadoop.conf.Configuration;
@@ -47,7 +46,7 @@ import com.anotherbigidea.io.InStream;
  * @author Andrzej Bialecki
  */
 public class SWFParser implements Parser {
-  public static final Log LOG = LogFactory.getLog("org.apache.nutch.parse.swf");
+  public static final Logger LOG = LoggerFactory.getLogger("org.apache.nutch.parse.swf");
 
   private Configuration conf = null;
 
@@ -102,7 +101,7 @@ public class SWFParser implements Parser {
         outlinks.add(olinks[i]);
       }
     } catch (Exception e) { // run time exception
-      e.printStackTrace(LogUtil.getErrorStream(LOG));
+      LOG.error("Error, runtime exception: ", e);
       return new ParseStatus(ParseStatus.FAILED, "Can't be handled as SWF document. " + e).getEmptyParseResult(content.getUrl(), getConf());
     } 
     if (text == null) text = "";

@@ -119,7 +119,7 @@ public class CrawlDatum implements WritableComparable<CrawlDatum>, Cloneable {
   private long fetchTime = System.currentTimeMillis();
   private byte retries;
   private int fetchInterval;
-  private float score = 1.0f;
+  private float score = 0.0f;
   private byte[] signature = null;
   private long modifiedTime;
   private org.apache.hadoop.io.MapWritable metaData;
@@ -262,7 +262,7 @@ public class CrawlDatum implements WritableComparable<CrawlDatum>, Cloneable {
     if (version > 3) {
       boolean hasMetadata = false;
       if (version < 7) {
-        MapWritable oldMetaData = new MapWritable();
+        org.apache.hadoop.io.MapWritable oldMetaData = new org.apache.hadoop.io.MapWritable();
         if (in.readBoolean()) {
           hasMetadata = true;
           metaData = new org.apache.hadoop.io.MapWritable();

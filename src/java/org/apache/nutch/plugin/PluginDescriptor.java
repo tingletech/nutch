@@ -20,13 +20,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 
 /**
@@ -53,7 +54,7 @@ public class PluginDescriptor {
   private ArrayList<URL> fNotExportedLibs = new ArrayList<URL>();
   private ArrayList<Extension> fExtensions = new ArrayList<Extension>();
   private PluginClassLoader fClassLoader;
-  public static final Log LOG = LogFactory.getLog(PluginDescriptor.class);
+  public static final Logger LOG = LoggerFactory.getLogger(PluginDescriptor.class);
   private Configuration fConf;
 
   /**
@@ -214,12 +215,17 @@ public class PluginDescriptor {
 
   /**
    * Adds a exported library with a relative path to the plugin directory.
+   * We automatically escape characters that are illegal in URLs. It is 
+   * recommended that code converts an abstract pathname into a URL by 
+   * first converting it into a URI, via the toURI method, and then 
+   * converting the URI into a URL via the URI.toURL method.
    * 
    * @param pLibPath
    */
   public void addExportedLibRelative(String pLibPath)
       throws MalformedURLException {
-    URL url = new File(getPluginPath() + File.separator + pLibPath).toURL();
+    URI uri = new File(getPluginPath() + File.separator + pLibPath).toURI();
+    URL url = uri.toURL();
     fExportedLibs.add(url);
   }
 
@@ -242,13 +248,18 @@ public class PluginDescriptor {
   }
 
   /**
-   * Adds a not exported library with a plugin directory relative path.
+   * Adds a exported library with a relative path to the plugin directory.
+   * We automatically escape characters that are illegal in URLs. It is 
+   * recommended that code converts an abstract pathname into a URL by 
+   * first converting it into a URI, via the toURI method, and then 
+   * converting the URI into a URL via the URI.toURL method.
    * 
    * @param pLibPath
    */
   public void addNotExportedLibRelative(String pLibPath)
       throws MalformedURLException {
-    URL url = new File(getPluginPath() + File.separator + pLibPath).toURL();
+    URI uri = new File(getPluginPath() + File.separator + pLibPath).toURI();
+    URL url = uri.toURL();
     fNotExportedLibs.add(url);
   }
 
@@ -279,7 +290,7 @@ public class PluginDescriptor {
     try {
       for (File file2 : file.listFiles()) {
         if (file2.getAbsolutePath().endsWith("properties"))
-          arrayList.add(file2.getParentFile().toURL());
+          arrayList.add(file2.getParentFile().toURI().toURL());
       }
     } catch (MalformedURLException e) {
       LOG.debug(getPluginId() + " " + e.toString());

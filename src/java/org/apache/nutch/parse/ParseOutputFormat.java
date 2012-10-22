@@ -18,15 +18,17 @@
 package org.apache.nutch.parse;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import org.apache.hadoop.conf.*;
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.io.SequenceFile.CompressionType;
-import org.apache.nutch.crawl.CrawlDatum;
-import org.apache.nutch.fetcher.Fetcher;
 import org.apache.hadoop.fs.*;
 import org.apache.hadoop.mapred.*;
+import org.apache.hadoop.util.StringUtils;
+import org.apache.nutch.crawl.CrawlDatum;
+import org.apache.nutch.fetcher.Fetcher;
 import org.apache.nutch.scoring.ScoringFilterException;
 import org.apache.nutch.scoring.ScoringFilters;
 import org.apache.nutch.util.StringUtil;
@@ -45,12 +47,12 @@ import org.apache.hadoop.util.Progressable;
 
 /* Parse content in a segment. */
 public class ParseOutputFormat implements OutputFormat<Text, Parse> {
-  private static final Log LOG = LogFactory.getLog(ParseOutputFormat.class);
+  private static final Logger LOG = LoggerFactory.getLogger(ParseOutputFormat.class);
 
   private URLFilters filters;
   private URLNormalizers normalizers;
   private ScoringFilters scfilters;
-  
+
   private static class SimpleEntry implements Entry<Text, CrawlDatum> {
     private Text key;
     private CrawlDatum value;
@@ -75,20 +77,34 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
   }
 
   public void checkOutputSpecs(FileSystem fs, JobConf job) throws IOException {
-    Path out = FileOutputFormat.getOutputPath(job);
-    if (fs.exists(new Path(out, CrawlDatum.PARSE_DIR_NAME)))
-      throw new IOException("Segment already parsed!");
+      Path out = FileOutputFormat.getOutputPath(job);
+      if ((out == null) && (job.getNumReduceTasks() != 0)) {
+          throw new InvalidJobConfException(
+                  "Output directory not set in JobConf.");
+      }
+      if (fs == null) {
+          fs = out.getFileSystem(job);
+      }
+      if (fs.exists(new Path(out, CrawlDatum.PARSE_DIR_NAME)))
+          throw new IOException("Segment already parsed!");
   }
 
   public RecordWriter<Text, Parse> getRecordWriter(FileSystem fs, JobConf job,
                                       String name, Progressable progress) throws IOException {
 
-    this.filters = new URLFilters(job);
-    this.normalizers = new URLNormalizers(job, URLNormalizers.SCOPE_OUTLINK);
+    if(job.getBoolean("parse.filter.urls", true)) {
+      filters = new URLFilters(job);
+    }
+
+    if(job.getBoolean("parse.normalize.urls", true)) {
+      normalizers = new URLNormalizers(job, URLNormalizers.SCOPE_OUTLINK);
+    }
+
     this.scfilters = new ScoringFilters(job);
     final int interval = job.getInt("db.fetch.interval.default", 2592000);
     final boolean ignoreExternalLinks = job.getBoolean("db.ignore.external.links", false);
     int maxOutlinksPerPage = job.getInt("db.max.outlinks.per.page", 100);
+    final boolean isParsing = job.getBoolean("fetcher.parse", true);
     final int maxOutlinks = (maxOutlinksPerPage < 0) ? Integer.MAX_VALUE
                                                      : maxOutlinksPerPage;
     final CompressionType compType = SequenceFileOutputFormat.getOutputCompressionType(job);
@@ -120,7 +136,6 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
           
           String fromUrl = key.toString();
           String fromHost = null; 
-          String toHost = null;          
           textOut.append(key, new ParseText(parse.getText()));
           
           ParseData parseData = parse.getData();
@@ -156,13 +171,20 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
                 pstatus.getMinorCode() == ParseStatus.SUCCESS_REDIRECT) {
               String newUrl = pstatus.getMessage();
               int refreshTime = Integer.valueOf(pstatus.getArgs()[1]);
+
               try {
-                newUrl = normalizers.normalize(newUrl,
-                    URLNormalizers.SCOPE_FETCHER);
+                if(normalizers != null) {
+                    newUrl = normalizers.normalize(newUrl,
+                        URLNormalizers.SCOPE_FETCHER);
+                }
               } catch (MalformedURLException mfue) {
                 newUrl = null;
               }
-              if (newUrl != null) newUrl = filters.filter(newUrl);
+
+              if (filters != null) {
+                if (newUrl != null) newUrl = filters.filter(newUrl);
+              }
+
               String url = key.toString();
               if (newUrl != null && !newUrl.equals(url)) {
                 String reprUrl =
@@ -200,44 +222,33 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
           List<Outlink> outlinkList = new ArrayList<Outlink>(outlinksToStore);
           for (int i = 0; i < links.length && validCount < outlinksToStore; i++) {
             String toUrl = links[i].getToUrl();
-            // ignore links to self (or anchors within the page)
-            if (fromUrl.equals(toUrl)) {
-              continue;
-            }
-            if (ignoreExternalLinks) {
-              try {
-                toHost = new URL(toUrl).getHost().toLowerCase();
-              } catch (MalformedURLException e) {
-                toHost = null;
-              }
-              if (toHost == null || !toHost.equals(fromHost)) { // external links
-                continue; // skip it
-              }
-            }
-            try {
-              toUrl = normalizers.normalize(toUrl,
-                          URLNormalizers.SCOPE_OUTLINK); // normalize the url
-              toUrl = filters.filter(toUrl);   // filter the url
+
+            // Only normalize and filter if fetcher.parse = false
+            if (!isParsing) {
+              toUrl = ParseOutputFormat.filterNormalize(fromUrl, toUrl, fromHost, ignoreExternalLinks, filters, normalizers);
               if (toUrl == null) {
                 continue;
               }
-            } catch (Exception e) {
-              continue;
             }
+
             CrawlDatum target = new CrawlDatum(CrawlDatum.STATUS_LINKED, interval);
             Text targetUrl = new Text(toUrl);
             try {
               scfilters.initialScore(targetUrl, target);
             } catch (ScoringFilterException e) {
               LOG.warn("Cannot filter init score for url " + key +
-                       ", using default: " + e.getMessage());
+                      ", using default: " + e.getMessage());
               target.setScore(0.0f);
             }
-            
+
             targets.add(new SimpleEntry(targetUrl, target));
+
+            // OVerwrite URL in Outlink object with normalized URL (NUTCH-1174)
+            links[i].setUrl(toUrl);
             outlinkList.add(links[i]);
             validCount++;
           }
+
           try {
             // compute score contributions and adjustment to the original score
             adjust = scfilters.distributeScoreToOutlinks((Text)key, parseData, 
@@ -277,6 +288,40 @@ public class ParseOutputFormat implements OutputFormat<Text, Parse> {
         
       };
     
+  }
+
+  public static String filterNormalize(String fromUrl, String toUrl, String fromHost, boolean ignoreExternalLinks, URLFilters filters, URLNormalizers normalizers) {
+    // ignore links to self (or anchors within the page)
+    if (fromUrl.equals(toUrl)) {
+      return null;
+    }
+    if (ignoreExternalLinks) {
+      String toHost;
+      try {
+        toHost = new URL(toUrl).getHost().toLowerCase();
+      } catch (MalformedURLException e) {
+        toHost = null;
+      }
+      if (toHost == null || !toHost.equals(fromHost)) { // external links
+        return null; // skip it
+      }
+    }
+    try {
+      if(normalizers != null) {
+        toUrl = normalizers.normalize(toUrl,
+                  URLNormalizers.SCOPE_OUTLINK); // normalize the url
+      }
+      if (filters != null) {
+        toUrl = filters.filter(toUrl);   // filter the url
+      }
+      if (toUrl == null) {
+        return null;
+      }
+    } catch (Exception e) {
+      return null;
+    }
+
+    return toUrl;
   }
 
 }

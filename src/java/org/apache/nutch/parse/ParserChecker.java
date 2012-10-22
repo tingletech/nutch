@@ -17,20 +17,20 @@
 
 package org.apache.nutch.parse;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
-
-import org.apache.nutch.util.NutchConfiguration;
-
-import org.apache.nutch.crawl.CrawlDatum;
 import org.apache.hadoop.io.Text;
-import org.apache.nutch.parse.ParseUtil;
-
-import org.apache.nutch.protocol.ProtocolFactory;
-import org.apache.nutch.protocol.Protocol;
+import org.apache.hadoop.util.Tool;
+import org.apache.hadoop.util.ToolRunner;
+import org.apache.nutch.crawl.CrawlDatum;
+import org.apache.nutch.crawl.SignatureFactory;
 import org.apache.nutch.protocol.Content;
+import org.apache.nutch.protocol.Protocol;
+import org.apache.nutch.protocol.ProtocolFactory;
+import org.apache.nutch.util.NutchConfiguration;
+import org.apache.nutch.util.URLUtil;
+import org.apache.nutch.util.StringUtil;
 
 /**
  * Parser checker, useful for testing parser.
@@ -38,13 +38,16 @@ import org.apache.nutch.protocol.Content;
  * @author John Xing
  */
 
-public class ParserChecker {
+public class ParserChecker implements Tool {
 
-  public static final Log LOG = LogFactory.getLog(ParserChecker.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ParserChecker.class);
 
-  public ParserChecker() {}
+  public ParserChecker() {
+  }
 
-  public static void main(String[] args) throws Exception {
+  Configuration conf = null;
+
+  public int run(String[] args) throws Exception {
     boolean dumpText = false;
     boolean force = false;
     String contentType = null;
@@ -63,20 +66,27 @@ public class ParserChecker {
         contentType = args[++i];
       } else if (args[i].equals("-dumpText")) {
         dumpText = true;
-      } else if (i != args.length-1) {
+      } else if (i != args.length - 1) {
         System.err.println(usage);
         System.exit(-1);
       } else {
-        url = args[i];
+        url = URLUtil.toASCII(args[i]);
       }
     }
 
-    if (LOG.isInfoEnabled()) { LOG.info("fetching: "+url); }
+    if (LOG.isInfoEnabled()) {
+      LOG.info("fetching: " + url);
+    }
 
-    Configuration conf = NutchConfiguration.create();
     ProtocolFactory factory = new ProtocolFactory(conf);
     Protocol protocol = factory.getProtocol(url);
-    Content content = protocol.getProtocolOutput(new Text(url), new CrawlDatum()).getContent();
+    Content content = protocol.getProtocolOutput(new Text(url),
+        new CrawlDatum()).getContent();
+
+    if (content == null) {
+      System.err.println("Can't fetch URL successfully");
+      return (-1);
+    }
 
     if (force) {
       content.setContentType(contentType);
@@ -86,21 +96,25 @@ public class ParserChecker {
 
     if (contentType == null) {
       System.err.println("");
-      System.exit(-1);
-    }
-
-    if (LOG.isInfoEnabled()) {
-      LOG.info("parsing: "+url);
-      LOG.info("contentType: "+contentType);
+      return (-1);
     }
 
     ParseResult parseResult = new ParseUtil(conf).parse(content);
+
+    // Calculate the signature
+    byte[] signature = SignatureFactory.getSignature(getConf()).calculate(content, parseResult.get(new Text(url)));
+
+    if (LOG.isInfoEnabled()) {
+      LOG.info("parsing: " + url);
+      LOG.info("contentType: " + contentType);
+      LOG.info("signature: " + StringUtil.toHexString(signature));
+    }
 
     for (java.util.Map.Entry<Text, Parse> entry : parseResult) {
       Parse parse = entry.getValue();
       System.out.print("---------\nUrl\n---------------\n");
       System.out.print(entry.getKey());
-      System.out.print("---------\nParseData\n---------\n");
+      System.out.print("\n---------\nParseData\n---------\n");
       System.out.print(parse.getData().toString());
       if (dumpText) {
         System.out.print("---------\nParseText\n---------\n");
@@ -108,6 +122,23 @@ public class ParserChecker {
       }
     }
 
-    System.exit(0);
+    return 0;
   }
+
+  @Override
+  public Configuration getConf() {
+    return conf;
+  }
+
+  @Override
+  public void setConf(Configuration c) {
+    conf = c;
+  }
+
+  public static void main(String[] args) throws Exception {
+    int res = ToolRunner.run(NutchConfiguration.create(), new ParserChecker(),
+        args);
+    System.exit(res);
+  }
+
 }

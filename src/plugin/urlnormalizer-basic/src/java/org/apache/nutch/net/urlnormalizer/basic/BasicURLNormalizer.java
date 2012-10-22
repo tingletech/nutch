@@ -20,31 +20,31 @@ package org.apache.nutch.net.urlnormalizer.basic;
 import java.net.URL;
 import java.net.MalformedURLException;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Slf4j Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Nutch imports
 import org.apache.nutch.net.URLNormalizer;
-import org.apache.nutch.util.LogUtil;
 
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
 import org.apache.oro.text.regex.*;
 
 /** Converts URLs to a normal form . */
-public class BasicURLNormalizer implements URLNormalizer {
-    public static final Log LOG = LogFactory.getLog(BasicURLNormalizer.class);
+public class BasicURLNormalizer extends Configured implements URLNormalizer {
+    public static final Logger LOG = LoggerFactory.getLogger(BasicURLNormalizer.class);
 
     private Perl5Compiler compiler = new Perl5Compiler();
-    private ThreadLocal matchers = new ThreadLocal() {
-        protected synchronized Object initialValue() {
+    private ThreadLocal<Perl5Matcher> matchers = new ThreadLocal<Perl5Matcher>() {
+        protected Perl5Matcher initialValue() {
           return new Perl5Matcher();
         }
       };
-    private Rule relativePathRule = null;
-    private Rule leadingRelativePathRule = null;
-    private Rule currentPathRule = null;
-    private Rule adjacentSlashRule = null;
+    private final Rule relativePathRule;
+    private final Rule leadingRelativePathRule;
+    private final Rule currentPathRule;
+    private final Rule adjacentSlashRule;
 
     private Configuration conf;
 
@@ -81,7 +81,6 @@ public class BasicURLNormalizer implements URLNormalizer {
         adjacentSlashRule.substitution = new Perl5Substitution("/");
         
       } catch (MalformedPatternException e) {
-        e.printStackTrace(LogUtil.getWarnStream(LOG));
         throw new RuntimeException(e);
       }
     }
@@ -105,7 +104,7 @@ public class BasicURLNormalizer implements URLNormalizer {
         if (!urlString.startsWith(protocol))        // protocol was lowercased
             changed = true;
 
-        if ("http".equals(protocol) || "ftp".equals(protocol)) {
+        if ("http".equals(protocol) || "https".equals(protocol) || "ftp".equals(protocol)) {
 
             if (host != null) {
                 String newHost = host.toLowerCase();    // lowercase host

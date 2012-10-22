@@ -16,8 +16,8 @@
  */
 package org.apache.nutch.indexer.solr;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.FileStatus;
@@ -36,7 +36,6 @@ import org.apache.nutch.util.NutchConfiguration;
 import org.apache.nutch.util.NutchJob;
 import org.apache.nutch.util.TimingUtil;
 import org.apache.solr.client.solrj.SolrServer;
-import org.apache.solr.client.solrj.impl.CommonsHttpSolrServer;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -46,7 +45,7 @@ import java.util.Random;
 
 public class SolrIndexer extends Configured implements Tool {
 
-  public static Log LOG = LogFactory.getLog(SolrIndexer.class);
+  public static Logger LOG = LoggerFactory.getLogger(SolrIndexer.class);
 
   public SolrIndexer() {
     super(null);
@@ -58,6 +57,29 @@ public class SolrIndexer extends Configured implements Tool {
 
   public void indexSolr(String solrUrl, Path crawlDb, Path linkDb,
       List<Path> segments) throws IOException {
+      boolean noCommit = !getConf().getBoolean(SolrConstants.COMMIT_INDEX, true);
+      indexSolr(solrUrl, crawlDb, linkDb, segments, noCommit, false, null);
+  }
+
+  public void indexSolr(String solrUrl, Path crawlDb, Path linkDb,
+          List<Path> segments, boolean noCommit) throws IOException {
+    indexSolr(solrUrl, crawlDb, linkDb, segments, noCommit, false, null);
+  }
+
+  public void indexSolr(String solrUrl, Path crawlDb, Path linkDb,
+          List<Path> segments, boolean noCommit, boolean deleteGone) throws IOException {
+    indexSolr(solrUrl, crawlDb, linkDb, segments, noCommit, deleteGone, null);
+  }
+  
+  public void indexSolr(String solrUrl, Path crawlDb, Path linkDb,
+      List<Path> segments, boolean noCommit, boolean deleteGone, String solrParams) throws IOException {
+    indexSolr(solrUrl, crawlDb, linkDb, segments, noCommit, deleteGone, solrParams, false, false);
+  }
+  
+  public void indexSolr(String solrUrl, Path crawlDb, Path linkDb,
+      List<Path> segments, boolean noCommit, boolean deleteGone, String solrParams,
+      boolean filter, boolean normalize) throws IOException {
+      
     SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     long start = System.currentTimeMillis();
     LOG.info("SolrIndexer: starting at " + sdf.format(start));
@@ -65,10 +87,19 @@ public class SolrIndexer extends Configured implements Tool {
     final JobConf job = new NutchJob(getConf());
     job.setJobName("index-solr " + solrUrl);
 
+    LOG.info("SolrIndexer: deleting gone documents: " + deleteGone);
+    LOG.info("SolrIndexer: URL filtering: " + filter);
+    LOG.info("SolrIndexer: URL normalizing: " + normalize);
+    
     IndexerMapReduce.initMRJob(crawlDb, linkDb, segments, job);
 
     job.set(SolrConstants.SERVER_URL, solrUrl);
-
+    job.setBoolean(IndexerMapReduce.INDEXER_DELETE, deleteGone);
+    job.setBoolean(IndexerMapReduce.URL_FILTERING, filter);
+    job.setBoolean(IndexerMapReduce.URL_NORMALIZING, normalize);
+    if (solrParams != null) {
+      job.set(SolrConstants.PARAMS, solrParams);
+    }
     NutchIndexWriterFactory.addClassToConf(job, SolrWriter.class);
 
     job.setReduceSpeculativeExecution(false);
@@ -80,30 +111,43 @@ public class SolrIndexer extends Configured implements Tool {
     try {
       JobClient.runJob(job);
       // do the commits once and for all the reducers in one go
-      SolrServer solr =  new CommonsHttpSolrServer(solrUrl);
-      solr.commit();
+      SolrServer solr =  SolrUtils.getCommonsHttpSolrServer(job);
+
+      if (!noCommit) {
+        solr.commit();
+      }
       long end = System.currentTimeMillis();
       LOG.info("SolrIndexer: finished at " + sdf.format(end) + ", elapsed: " + TimingUtil.elapsedTime(start, end));
     }
     catch (Exception e){
-      LOG.error(e);
+      LOG.error(e.toString());
     } finally {
       FileSystem.get(job).delete(tmp, true);
     }
   }
 
   public int run(String[] args) throws Exception {
-    if (args.length < 4) {
-      System.err.println("Usage: SolrIndexer <solr url> <crawldb> <linkdb> (<segment> ... | -dir <segments>)");
+    if (args.length < 3) {
+      System.err.println("Usage: SolrIndexer <solr url> <crawldb> [-linkdb <linkdb>] [-params k1=v1&k2=v2...] (<segment> ... | -dir <segments>) [-noCommit] [-deleteGone] [-filter] [-normalize]");
       return -1;
     }
 
     final Path crawlDb = new Path(args[1]);
-    final Path linkDb = new Path(args[2]);
+    Path linkDb = null;
 
     final List<Path> segments = new ArrayList<Path>();
-    for (int i = 3; i < args.length; i++) {
-      if (args[i].equals("-dir")) {
+    String params = null;
+
+    boolean noCommit = false;
+    boolean deleteGone = false;
+    boolean filter = false;
+    boolean normalize = false;
+
+    for (int i = 2; i < args.length; i++) {
+    	if (args[i].equals("-linkdb")) {
+    		linkDb = new Path(args[++i]);
+    	}
+    	else if (args[i].equals("-dir")) {
         Path dir = new Path(args[++i]);
         FileSystem fs = dir.getFileSystem(getConf());
         FileStatus[] fstats = fs.listStatus(dir,
@@ -112,16 +156,26 @@ public class SolrIndexer extends Configured implements Tool {
         for (Path p : files) {
           segments.add(p);
         }
+      } else if (args[i].equals("-noCommit")) {
+        noCommit = true;
+      } else if (args[i].equals("-deleteGone")) {
+        deleteGone = true;
+      } else if (args[i].equals("-filter")) {
+        filter = true;
+      } else if (args[i].equals("-normalize")) {
+        normalize = true;
+      } else if (args[i].equals("-params")) {
+        params = args[++i];
       } else {
         segments.add(new Path(args[i]));
       }
     }
 
     try {
-      indexSolr(args[0], crawlDb, linkDb, segments);
+      indexSolr(args[0], crawlDb, linkDb, segments, noCommit, deleteGone, params, filter, normalize);
       return 0;
     } catch (final Exception e) {
-      LOG.fatal("SolrIndexer: " + StringUtils.stringifyException(e));
+      LOG.error("SolrIndexer: " + StringUtils.stringifyException(e));
       return -1;
     }
   }

@@ -19,8 +19,8 @@ package org.apache.nutch.crawl;
 
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Mapper;
@@ -46,17 +46,21 @@ public class CrawlDbFilter implements Mapper<Text, CrawlDatum, Text, CrawlDatum>
 
   private boolean urlNormalizers;
 
+  private boolean url404Purging;
+
   private URLFilters filters;
 
   private URLNormalizers normalizers;
   
   private String scope;
 
-  public static final Log LOG = LogFactory.getLog(CrawlDbFilter.class);
+  public static final Logger LOG = LoggerFactory.getLogger(CrawlDbFilter.class);
 
   public void configure(JobConf job) {
     urlFiltering = job.getBoolean(URL_FILTERING, false);
     urlNormalizers = job.getBoolean(URL_NORMALIZING, false);
+    url404Purging = job.getBoolean(CrawlDb.CRAWLDB_PURGE_404, false);
+
     if (urlFiltering) {
       filters = new URLFilters(job);
     }
@@ -75,6 +79,11 @@ public class CrawlDbFilter implements Mapper<Text, CrawlDatum, Text, CrawlDatum>
       Reporter reporter) throws IOException {
 
     String url = key.toString();
+
+    // https://issues.apache.org/jira/browse/NUTCH-1101 check status first, cheaper than normalizing or filtering
+    if (url404Purging && CrawlDatum.STATUS_DB_GONE == value.getStatus()) {
+      url = null;
+    }
     if (urlNormalizers) {
       try {
         url = normalizers.normalize(url, scope); // normalize the url

@@ -29,8 +29,8 @@ import java.util.Hashtable;
 import java.util.StringTokenizer;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 // Nutch imports
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configurable;
@@ -52,7 +52,7 @@ import org.apache.nutch.protocol.RobotRules;
  */
 public class RobotRulesParser implements Configurable {
   
-  public static final Log LOG = LogFactory.getLog(RobotRulesParser.class);
+  public static final Logger LOG = LoggerFactory.getLogger(RobotRulesParser.class);
 
   private boolean allowForbidden = false;
 
@@ -182,6 +182,7 @@ public class RobotRulesParser implements Configurable {
       while (pos < end) {
         if (path.startsWith(entries[pos].prefix))
           return entries[pos].allowed;
+
         pos++;
       }
 
@@ -335,6 +336,12 @@ public class RobotRulesParser implements Configurable {
         doneAgents= true;
         String path= line.substring(line.indexOf(":") + 1);
         path= path.trim();
+        
+        // Skip if no path was specified
+        if (path.length() == 0) {
+          // Go to the next token
+          continue;
+        }
         try {
           path= URLDecoder.decode(path, CHARACTER_ENCODING);
         } catch (Exception e) {
@@ -560,7 +567,7 @@ public class RobotRulesParser implements Configurable {
 
       String testPath= testsIn.readLine().trim();
       while (testPath != null) {
-        System.out.println( (rules.isAllowed(testPath) ? 
+        System.out.println( (rules.isAllowed(new URL(testPath)) ? 
                              "allowed" : "not allowed")
                             + ":\t" + testPath);
         testPath= testsIn.readLine();

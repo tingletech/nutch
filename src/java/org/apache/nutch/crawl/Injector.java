@@ -22,8 +22,8 @@ import java.text.SimpleDateFormat;
 import java.util.*;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.fs.*;
@@ -32,6 +32,7 @@ import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.*;
 
 import org.apache.nutch.net.*;
+import org.apache.nutch.metadata.Nutch;
 import org.apache.nutch.scoring.ScoringFilterException;
 import org.apache.nutch.scoring.ScoringFilters;
 import org.apache.nutch.util.NutchConfiguration;
@@ -45,15 +46,18 @@ import org.apache.nutch.util.TimingUtil;
  * Note that some metadata keys are reserved : <br>
  * - <i>nutch.score</i> : allows to set a custom score for a specific URL <br>
  * - <i>nutch.fetchInterval</i> : allows to set a custom fetch interval for a specific URL <br>
+ * - <i>nutch.fetchInterval.fixed</i> : allows to set a custom fetch interval for a specific URL that is not changed by AdaptiveFetchSchedule <br>
  * e.g. http://www.nutch.org/ \t nutch.score=10 \t nutch.fetchInterval=2592000 \t userType=open_source
  **/
 public class Injector extends Configured implements Tool {
-  public static final Log LOG = LogFactory.getLog(Injector.class);
+  public static final Logger LOG = LoggerFactory.getLogger(Injector.class);
   
   /** metadata key reserved for setting a custom score for a specific URL */
   public static String nutchScoreMDName = "nutch.score";
   /** metadata key reserved for setting a custom fetchInterval for a specific URL */
   public static String nutchFetchIntervalMDName = "nutch.fetchInterval";
+  /** metadata key reserved for setting a fixed custom fetchInterval for a specific URL */
+  public static String nutchFixedFetchIntervalMDName = "nutch.fetchInterval.fixed";
 
   /** Normalize and filter injected urls. */
   public static class InjectMapper implements Mapper<WritableComparable, Text, Text, CrawlDatum> {
@@ -91,6 +95,7 @@ public class Injector extends Configured implements Tool {
       // must be name=value and separated by \t
       float customScore = -1f;
       int customInterval = interval;
+      int fixedInterval = -1;
       Map<String,String> metadata = new TreeMap<String,String>();
       if (url.indexOf("\t")!=-1){
     	  String[] splits = url.split("\t");
@@ -109,11 +114,16 @@ public class Injector extends Configured implements Tool {
     			  customScore = Float.parseFloat(metavalue);}
     			  catch (NumberFormatException nfe){}
     		  }
-    		  else if (metaname.equals(nutchFetchIntervalMDName)) {
-    			  try {
-    				  customInterval = Integer.parseInt(metavalue);}
-    			  catch (NumberFormatException nfe){}
-    		  }
+                  else if (metaname.equals(nutchFetchIntervalMDName)) {
+                          try {
+                                  customInterval = Integer.parseInt(metavalue);}
+                          catch (NumberFormatException nfe){}
+                  }
+                  else if (metaname.equals(nutchFixedFetchIntervalMDName)) {
+                          try {
+                                  fixedInterval = Integer.parseInt(metavalue);}
+                          catch (NumberFormatException nfe){}
+                  }
     		  else metadata.put(metaname,metavalue);
     	  }
       }
@@ -126,7 +136,18 @@ public class Injector extends Configured implements Tool {
       }
       if (url != null) {                          // if it passes
         value.set(url);                           // collect it
-        CrawlDatum datum = new CrawlDatum(CrawlDatum.STATUS_INJECTED, customInterval);
+        CrawlDatum datum = new CrawlDatum();
+        datum.setStatus(CrawlDatum.STATUS_INJECTED);
+
+        // Is interval custom? Then set as meta data
+        if (fixedInterval > -1) {
+          // Set writable using float. Flaot is used by AdaptiveFetchSchedule
+          datum.getMetaData().put(Nutch.WRITABLE_FIXED_INTERVAL_KEY, new FloatWritable(fixedInterval));
+          datum.setFetchInterval(fixedInterval);
+        } else {
+          datum.setFetchInterval(customInterval);
+        }
+
         datum.setFetchTime(curTime);
         // now add the metadata
         Iterator<String> keysIter = metadata.keySet().iterator();
@@ -152,7 +173,18 @@ public class Injector extends Configured implements Tool {
 
   /** Combine multiple new entries for a url. */
   public static class InjectReducer implements Reducer<Text, CrawlDatum, Text, CrawlDatum> {
-    public void configure(JobConf job) {}    
+    private int interval;
+    private float scoreInjected;
+    private boolean overwrite = false;
+    private boolean update = false;
+
+    public void configure(JobConf job) {
+      interval = job.getInt("db.fetch.interval.default", 2592000);
+      scoreInjected = job.getFloat("db.score.injected", 1.0f);
+      overwrite = job.getBoolean("db.injector.overwrite", false);
+      update = job.getBoolean("db.injector.update", false);
+    }
+    
     public void close() {}
 
     private CrawlDatum old = new CrawlDatum();
@@ -162,19 +194,48 @@ public class Injector extends Configured implements Tool {
                        OutputCollector<Text, CrawlDatum> output, Reporter reporter)
       throws IOException {
       boolean oldSet = false;
+      boolean injectedSet = false;
       while (values.hasNext()) {
         CrawlDatum val = values.next();
         if (val.getStatus() == CrawlDatum.STATUS_INJECTED) {
           injected.set(val);
           injected.setStatus(CrawlDatum.STATUS_DB_UNFETCHED);
+          injectedSet = true;
         } else {
           old.set(val);
           oldSet = true;
         }
       }
       CrawlDatum res = null;
-      if (oldSet) res = old; // don't overwrite existing value
-      else res = injected;
+      
+      /**
+       * Whether to overwrite, ignore or update existing records
+       * @see https://issues.apache.org/jira/browse/NUTCH-1405
+       */
+      
+      // Injected record already exists and overwrite but not update
+      if (injectedSet && oldSet && overwrite) {
+        res = injected;
+        
+        if (update) {
+          LOG.info(key.toString() + " overwritten with injected record but update was specified.");
+        }
+      }
+
+      // Injected record already exists and update but not overwrite
+      if (injectedSet && oldSet && update && !overwrite) {
+        res = old;
+        old.putAllMetaData(injected);
+        old.setScore(injected.getScore() != scoreInjected ? injected.getScore() : old.getScore());
+        old.setFetchInterval(injected.getFetchInterval() != interval ? injected.getFetchInterval() : old.getFetchInterval());
+      }
+      
+      // Old default behaviour
+      if (injectedSet && !oldSet) {
+        res = injected;
+      } else {
+        res = old;
+      }
 
       output.collect(key, res);
     }
@@ -248,7 +309,7 @@ public class Injector extends Configured implements Tool {
       inject(new Path(args[0]), new Path(args[1]));
       return 0;
     } catch (Exception e) {
-      LOG.fatal("Injector: " + StringUtils.stringifyException(e));
+      LOG.error("Injector: " + StringUtils.stringifyException(e));
       return -1;
     }
   }

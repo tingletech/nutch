@@ -23,9 +23,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map.Entry;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Slf4j Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
@@ -38,7 +38,6 @@ import org.apache.nutch.parse.ParseData;
 import org.apache.nutch.protocol.Content;
 import org.apache.nutch.scoring.ScoringFilter;
 import org.apache.nutch.scoring.ScoringFilterException;
-import org.apache.nutch.util.LogUtil;
 
 /**
  * This plugin implements a variant of an Online Page Importance Computation
@@ -52,7 +51,7 @@ import org.apache.nutch.util.LogUtil;
  */
 public class OPICScoringFilter implements ScoringFilter {
 
-  private final static Log LOG = LogFactory.getLog(OPICScoringFilter.class);
+  private final static Logger LOG = LoggerFactory.getLogger(OPICScoringFilter.class);
 
   private Configuration conf;
   private float scoreInjected;
@@ -116,7 +115,7 @@ public class OPICScoringFilter implements ScoringFilter {
       try {
         score = Float.parseFloat(scoreString);
       } catch (Exception e) {
-        e.printStackTrace(LogUtil.getWarnStream(LOG));
+        LOG.error("Error: ", e);
       }
     }
     int validCount = targets.size();
@@ -142,7 +141,7 @@ public class OPICScoringFilter implements ScoringFilter {
           target.getValue().setScore(externalScore);
         }
       } catch (MalformedURLException e) {
-        e.printStackTrace(LogUtil.getWarnStream(LOG));
+        LOG.error("Error: ", e);
         target.getValue().setScore(externalScore);
       }
     }

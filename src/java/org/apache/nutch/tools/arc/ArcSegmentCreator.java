@@ -21,8 +21,8 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Map.Entry;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
@@ -55,7 +55,6 @@ import org.apache.nutch.parse.ParseUtil;
 import org.apache.nutch.protocol.Content;
 import org.apache.nutch.protocol.ProtocolStatus;
 import org.apache.nutch.scoring.ScoringFilters;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.NutchConfiguration;
 import org.apache.nutch.util.NutchJob;
 import org.apache.nutch.util.StringUtil;
@@ -73,7 +72,7 @@ public class ArcSegmentCreator
   extends Configured
   implements Tool, Mapper<Text, BytesWritable, Text, NutchWritable> {
 
-  public static final Log LOG = LogFactory.getLog(ArcSegmentCreator.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ArcSegmentCreator.class);
   public static final String URL_VERSION = "arc.url.version";
   private JobConf jobConf;
   private URLFilters urlFilters;
@@ -168,7 +167,6 @@ public class ArcSegmentCreator
       }
       catch (Exception e) {
         if (LOG.isWarnEnabled()) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
           LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
         }
       }
@@ -223,7 +221,6 @@ public class ArcSegmentCreator
             }
             catch (Exception e) {
               if (LOG.isWarnEnabled()) {
-                e.printStackTrace(LogUtil.getWarnStream(LOG));
                 LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
               }
             }
@@ -233,8 +230,8 @@ public class ArcSegmentCreator
         }
       }
       catch (IOException e) {
-        if (LOG.isFatalEnabled()) {
-          LOG.fatal("ArcSegmentCreator caught:" + StringUtils.stringifyException(e));
+        if (LOG.isErrorEnabled()) {
+          LOG.error("ArcSegmentCreator caught:" + StringUtils.stringifyException(e));
         }
       }
 
@@ -318,7 +315,7 @@ public class ArcSegmentCreator
         // the arc file,  TODO: currently this doesn't handle text of errors
         // pages (i.e. 404, etc.). We assume we won't get those.
         ProtocolStatus status = ProtocolStatus.STATUS_SUCCESS;
-        Content content = new Content(urlStr, urlStr, bytes.get(), contentType,
+        Content content = new Content(urlStr, urlStr, bytes.getBytes(), contentType,
           new Metadata(), getConf());
         
         // set the url version into the metadata
@@ -398,7 +395,7 @@ public class ArcSegmentCreator
       return 0;
     }
     catch (Exception e) {
-      LOG.fatal("ArcSegmentCreator: " + StringUtils.stringifyException(e));
+      LOG.error("ArcSegmentCreator: " + StringUtils.stringifyException(e));
       return -1;
     }
   }

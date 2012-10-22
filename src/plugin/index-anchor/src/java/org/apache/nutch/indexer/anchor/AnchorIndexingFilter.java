@@ -16,8 +16,8 @@
  */
 package org.apache.nutch.indexer.anchor;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import java.util.HashSet;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.io.Text;
 import org.apache.nutch.crawl.CrawlDatum;
@@ -26,6 +26,8 @@ import org.apache.nutch.indexer.IndexingException;
 import org.apache.nutch.indexer.IndexingFilter;
 import org.apache.nutch.indexer.NutchDocument;
 import org.apache.nutch.parse.Parse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Indexing filter that indexes all inbound anchor text for a document. 
@@ -33,11 +35,15 @@ import org.apache.nutch.parse.Parse;
 public class AnchorIndexingFilter
   implements IndexingFilter {
 
-  public static final Log LOG = LogFactory.getLog(AnchorIndexingFilter.class);
+  public static final Logger LOG = LoggerFactory.getLogger(AnchorIndexingFilter.class);
   private Configuration conf;
+  private boolean deduplicate = false;
 
   public void setConf(Configuration conf) {
     this.conf = conf;
+
+    deduplicate = conf.getBoolean("anchorIndexingFilter.deduplicate", false);
+    LOG.info("Anchor deduplication is: " + (deduplicate ? "on" : "off"));
   }
 
   public Configuration getConf() {
@@ -49,8 +55,24 @@ public class AnchorIndexingFilter
 
     String[] anchors = (inlinks != null ? inlinks.getAnchors()
       : new String[0]);
+
+    HashSet<String> set = null;
+
     for (int i = 0; i < anchors.length; i++) {
-      doc.add("anchor", anchors[i]);
+      if (deduplicate) {
+        if (set == null) set = new HashSet<String>();
+        String lcAnchor = anchors[i].toLowerCase();
+
+        // Check if already processed the current anchor
+        if (!set.contains(lcAnchor)) {
+          doc.add("anchor", anchors[i]);
+
+          // Add to map
+          set.add(lcAnchor);
+        }
+      } else {
+        doc.add("anchor", anchors[i]);
+      }
     }
 
     return doc;

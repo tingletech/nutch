@@ -28,8 +28,8 @@ import java.util.List;
 import java.util.ArrayList;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Hadoop imports
 import org.apache.hadoop.conf.Configuration;
@@ -43,8 +43,8 @@ import org.apache.nutch.net.*;
  * regular expressions.
  *
  * <p>The regular expressions rules are expressed in a file. The file of rules
- * is provided by each implementation using the
- * {@link #getRulesFile(Configuration)} method.</p>
+ * is determined for each implementation using the
+ * {@link #getRulesReader(Configuration conf)} method.</p>
  * 
  * <p>The format of this file is made of many rules (one per line):<br/>
  * <code>
@@ -58,10 +58,10 @@ import org.apache.nutch.net.*;
 public abstract class RegexURLFilterBase implements URLFilter {
 
   /** My logger */
-  private final static Log LOG = LogFactory.getLog(RegexURLFilterBase.class);
+  private final static Logger LOG = LoggerFactory.getLogger(RegexURLFilterBase.class);
 
   /** An array of applicable rules */
-  private RegexRule[] rules;
+  private List<RegexRule> rules;
 
   /** The current configuration */
   private Configuration conf;
@@ -125,10 +125,10 @@ public abstract class RegexURLFilterBase implements URLFilter {
    * -------------------------- */
   
   // Inherited Javadoc
-  public synchronized String filter(String url) {
-    for (int i=0; i<rules.length; i++) {
-      if (rules[i].match(url)) {
-        return rules[i].accept() ? url : null;
+  public String filter(String url) {
+    for (RegexRule rule : rules) {
+      if (rule.match(url)) {
+        return rule.accept() ? url : null;
       }
     };
     return null;
@@ -174,11 +174,11 @@ public abstract class RegexURLFilterBase implements URLFilter {
    * @param reader is a reader of regular expressions rules.
    * @return the corresponding {@RegexRule rules}.
    */
-  private RegexRule[] readRules(Reader reader)
+  private List<RegexRule> readRules(Reader reader)
     throws IOException, IllegalArgumentException {
 
     BufferedReader in = new BufferedReader(reader);
-    List rules = new ArrayList();
+    List<RegexRule> rules = new ArrayList<RegexRule>();
     String line;
        
     while((line=in.readLine())!=null) {
@@ -205,7 +205,7 @@ public abstract class RegexURLFilterBase implements URLFilter {
       RegexRule rule = createRule(sign, regex);
       rules.add(rule);
     }
-    return (RegexRule[]) rules.toArray(new RegexRule[rules.size()]);
+    return rules;
   }
 
   /**

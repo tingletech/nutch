@@ -37,7 +37,6 @@ import org.apache.nutch.net.protocols.Response;
 import org.apache.nutch.protocol.ProtocolException;
 import org.apache.nutch.protocol.http.api.HttpBase;
 import org.apache.nutch.protocol.http.api.HttpException;
-import org.apache.nutch.util.LogUtil;
 
 
 /** An HTTP response. */
@@ -50,7 +49,6 @@ public class HttpResponse implements Response {
   private byte[] content;
   private int code;
   private Metadata headers = new SpellCheckedMetadata();
-
 
   public HttpResponse(HttpBase http, URL url, CrawlDatum datum)
     throws ProtocolException, IOException {
@@ -117,15 +115,19 @@ public class HttpResponse implements Response {
 
       String userAgent = http.getUserAgent();
       if ((userAgent == null) || (userAgent.length() == 0)) {
-        if (Http.LOG.isFatalEnabled()) { Http.LOG.fatal("User-agent is not set!"); }
+        if (Http.LOG.isErrorEnabled()) { Http.LOG.error("User-agent is not set!"); }
       } else {
         reqStr.append("User-Agent: ");
         reqStr.append(userAgent);
         reqStr.append("\r\n");
       }
-      
+
       reqStr.append("Accept-Language: ");
       reqStr.append(this.http.getAcceptLanguage());
+      reqStr.append("\r\n");
+
+      reqStr.append("Accept: ");
+      reqStr.append(this.http.getAccept());
       reqStr.append("\r\n");
 
       if (datum.getModifiedTime() > 0) {
@@ -213,7 +215,8 @@ public class HttpResponse implements Response {
     if (contentLengthString != null) {
       contentLengthString = contentLengthString.trim();
       try {
-        contentLength = Integer.parseInt(contentLengthString);
+        if (!contentLengthString.isEmpty()) 
+          contentLength = Integer.parseInt(contentLengthString);
       } catch (NumberFormatException e) {
         throw new HttpException("bad content length: "+contentLengthString);
       }
@@ -386,7 +389,7 @@ public class HttpResponse implements Response {
           processHeaderLine(line);
         } catch (Exception e) {
           // fixme:
-          e.printStackTrace(LogUtil.getErrorStream(Http.LOG));
+          Http.LOG.warn("Error: ", e);
         }
         return;
       }

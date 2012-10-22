@@ -29,7 +29,7 @@
 
 <!-- removes session ids from urls (such as jsessionid and PHPSESSID) -->
 <regex>
-  <pattern>([;_]?((?i)l|j|bv_)?((?i)sid|phpsessid|sessionid)=.*?)(\?|&amp;|#|$)</pattern>
+  <pattern>(?i)(;?\b_?(l|j|bv_)?(sid|phpsessid|sessionid)=.*?)(\?|&amp;|#|$)</pattern>
   <substitution>$4</substitution>
 </regex>
 
@@ -61,6 +61,12 @@
 <regex>
   <pattern>[\?&amp;\.]$</pattern>
   <substitution></substitution>
+</regex>
+
+<!-- removes duplicate slashes -->
+<regex>
+  <pattern>(?&lt;!:)/{2,}</pattern>
+  <substitution>/</substitution>
 </regex>
 
 </regex-normalize>

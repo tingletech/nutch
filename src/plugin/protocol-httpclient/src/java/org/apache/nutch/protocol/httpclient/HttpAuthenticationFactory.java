@@ -23,9 +23,9 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Slf4j Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Hadoop imports
 import org.apache.hadoop.conf.Configuration;
@@ -33,7 +33,6 @@ import org.apache.hadoop.conf.Configurable;
 
 // Nutch imports
 import org.apache.nutch.metadata.Metadata;
-import org.apache.nutch.util.LogUtil;
 
 
 /**
@@ -56,7 +55,7 @@ public class HttpAuthenticationFactory implements Configurable {
      */
     public static final String WWW_AUTHENTICATE = "WWW-Authenticate";
 	
-    public static final Log LOG = LogFactory.getLog(HttpAuthenticationFactory.class);
+    public static final Logger LOG = LoggerFactory.getLogger(HttpAuthenticationFactory.class);
 
     private static Map auths = new TreeMap(); 
 
@@ -135,7 +134,7 @@ public class HttpAuthenticationFactory implements Configurable {
 				//TODO Add additional Authentication lookups here
 			}
 		} catch (Exception e) {
-			e.printStackTrace(LogUtil.getErrorStream(LOG));
+			LOG.error("Error: ", e);
 		}
         return null;
     }

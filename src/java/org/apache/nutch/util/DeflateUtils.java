@@ -23,16 +23,16 @@ import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.DeflaterOutputStream;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Slf4j Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *  A collection of utility methods for working on deflated data.
  */
 public class DeflateUtils {
   
-  private static final Log LOG = LogFactory.getLog(DeflateUtils.class);
+  private static final Logger LOG = LoggerFactory.getLogger(DeflateUtils.class);
   private static final int EXPECTED_COMPRESSION_RATIO = 5;
   private static final int BUF_SIZE = 4096;
 
@@ -77,8 +77,7 @@ public class DeflateUtils {
 	outStream.write(buf, 0, size);
 	written+= size;
       } catch (Exception e) {
-	LOG.info( "Caught Exception in inflateBestEffort" );
-        e.printStackTrace(LogUtil.getWarnStream(LOG));
+	LOG.info( "Caught Exception in inflateBestEffort", e );
 	break;
       }
     }
@@ -128,13 +127,13 @@ public class DeflateUtils {
     try {
       outStream.write(in);
     } catch (Exception e) {
-      e.printStackTrace(LogUtil.getWarnStream(LOG));
+      LOG.error("Error compressing: ", e);
     }
 
     try {
       outStream.close();
     } catch (IOException e) {
-      e.printStackTrace(LogUtil.getWarnStream(LOG));
+      LOG.error("Error closing: ", e);
     }
 
     return byteOut.toByteArray();

@@ -28,10 +28,13 @@
   <target name="deploy">
      <ant dir="creativecommons" target="deploy"/>
      <ant dir="feed" target="deploy"/>
+     <ant dir="headings" target="deploy"/>
      <ant dir="index-basic" target="deploy"/>
      <ant dir="index-anchor" target="deploy"/>
      <ant dir="index-more" target="deploy"/>
-     <ant dir="languageidentifier" target="deploy"/>
+     <ant dir="index-static" target="deploy"/>
+     <ant dir="index-metadata" target="deploy"/>
+     <ant dir="language-identifier" target="deploy"/>
      <ant dir="lib-http" target="deploy"/>
      <ant dir="lib-nekohtml" target="deploy"/>
      <ant dir="lib-regex-filter" target="deploy"/>
@@ -45,6 +48,7 @@
      <ant dir="parse-ext" target="deploy"/>
      <ant dir="parse-js" target="deploy"/>
      <ant dir="parse-html" target="deploy"/>
+     <ant dir="parse-metatags" target="deploy"/>
      <ant dir="parse-swf" target="deploy"/>
      <ant dir="parse-tika" target="deploy"/>
      <ant dir="parse-zip" target="deploy"/>
@@ -54,12 +58,14 @@
      <ant dir="tld" target="deploy"/>
      <ant dir="urlfilter-automaton" target="deploy"/>
      <ant dir="urlfilter-domain" target="deploy" />
+     <ant dir="urlfilter-domainblacklist" target="deploy" />
      <ant dir="urlfilter-prefix" target="deploy"/>
      <ant dir="urlfilter-regex" target="deploy"/>
      <ant dir="urlfilter-suffix" target="deploy"/>
      <ant dir="urlfilter-validator" target="deploy"/>
      <ant dir="urlmeta" target="deploy"/>
      <ant dir="urlnormalizer-basic" target="deploy"/>
+     <ant dir="urlnormalizer-host" target="deploy"/>
      <ant dir="urlnormalizer-pass" target="deploy"/>
      <ant dir="urlnormalizer-regex" target="deploy"/>
   </target>
@@ -71,22 +77,25 @@
     <parallel threadCount="2">
      <ant dir="creativecommons" target="test"/>
      <ant dir="index-more" target="test"/>
-     <ant dir="languageidentifier" target="test"/>
+     <ant dir="language-identifier" target="test"/>
      <ant dir="lib-http" target="test"/>
      <ant dir="protocol-file" target="test"/>
      <ant dir="protocol-httpclient" target="test"/>
      <!--ant dir="parse-ext" target="test"/-->
      <ant dir="feed" target="test"/>
      <ant dir="parse-html" target="test"/>
+     <ant dir="parse-metatags" target="test"/>
      <ant dir="parse-swf" target="test"/>
      <ant dir="parse-tika" target="test"/>
      <ant dir="parse-zip" target="test"/>
      <ant dir="subcollection" target="test"/>
      <ant dir="urlfilter-automaton" target="test"/>
-     <ant dir="urlfilter-domain" target="test" />
+     <ant dir="urlfilter-domain" target="test"/>
+     <ant dir="urlfilter-domainblacklist" target="test"/>
      <ant dir="urlfilter-regex" target="test"/>
      <ant dir="urlfilter-suffix" target="test"/>
      <ant dir="urlnormalizer-basic" target="test"/>
+     <ant dir="urlnormalizer-host" target="test"/>
      <ant dir="urlnormalizer-pass" target="test"/>
      <ant dir="urlnormalizer-regex" target="test"/>
     </parallel>
@@ -98,10 +107,13 @@
   <target name="clean">
     <ant dir="creativecommons" target="clean"/>
     <ant dir="feed" target="clean"/>
+    <ant dir="headings" target="clean"/>
     <ant dir="index-basic" target="clean"/>
     <ant dir="index-anchor" target="clean"/>
     <ant dir="index-more" target="clean"/>
-    <ant dir="languageidentifier" target="clean"/>
+    <ant dir="index-static" target="clean"/>
+    <ant dir="index-metadata" target="clean"/>
+    <ant dir="language-identifier" target="clean"/>
     <ant dir="lib-commons-httpclient" target="clean"/>
     <ant dir="lib-http" target="clean"/>
     <ant dir="lib-lucene-analyzers" target="clean"/>
@@ -117,6 +129,7 @@
     <ant dir="parse-ext" target="clean"/>
     <ant dir="parse-js" target="clean"/>
     <ant dir="parse-html" target="clean"/>
+    <ant dir="parse-metatags" target="clean"/>
     <ant dir="parse-swf" target="clean"/>
     <ant dir="parse-tika" target="clean"/>
     <ant dir="parse-zip" target="clean"/>
@@ -126,11 +139,13 @@
     <ant dir="tld" target="clean"/>
     <ant dir="urlfilter-automaton" target="clean"/>
     <ant dir="urlfilter-domain" target="clean" />
+    <ant dir="urlfilter-domainblacklist" target="clean" />
     <ant dir="urlfilter-prefix" target="clean"/>
     <ant dir="urlfilter-regex" target="clean"/>
     <ant dir="urlfilter-suffix" target="clean"/>
     <ant dir="urlfilter-validator" target="clean"/>
     <ant dir="urlmeta" target="clean"/>
+    <ant dir="urlnormalizer-host" target="clean"/>
     <ant dir="urlnormalizer-basic" target="clean"/>
     <ant dir="urlnormalizer-pass" target="clean"/>
     <ant dir="urlnormalizer-regex" target="clean"/>

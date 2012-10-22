@@ -30,13 +30,12 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.nutch.util.DomUtil;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.NutchConfiguration;
 import org.apache.nutch.util.ObjectCache;
 import org.apache.xerces.dom.DocumentImpl;
@@ -48,7 +47,7 @@ public class CollectionManager extends Configured {
 
   public static final String DEFAULT_FILE_NAME = "subcollections.xml";
 
-  static final Log LOG = LogFactory.getLog(CollectionManager.class);
+  static final Logger LOG = LoggerFactory.getLogger(CollectionManager.class);
 
   transient Map collectionMap = new HashMap();
 
@@ -79,7 +78,6 @@ public class CollectionManager extends Configured {
     } catch (Exception e) {
       if (LOG.isWarnEnabled()) {
         LOG.warn("Error occured:" + e);
-        e.printStackTrace(LogUtil.getWarnStream(LOG));
       }
     }
   }
@@ -167,25 +165,25 @@ public class CollectionManager extends Configured {
 
   /**
    * Return names of collections url is part of
-   * 
+   *
    * @param url
    *          The url to test against Collections
-   * @return Space delimited string of collection names url is part of
+   * @return Subcollections
    */
-  public List<String> getSubCollections(final String url) {
-    List<String> collections = new ArrayList<String>();
+  public List<Subcollection> getSubCollections(final String url) {
+    List<Subcollection> collections = new ArrayList<Subcollection>();
     final Iterator iterator = collectionMap.values().iterator();
 
     while (iterator.hasNext()) {
       final Subcollection subCol = (Subcollection) iterator.next();
       if (subCol.filter(url) != null) {
-        collections.add(subCol.name);
+        collections.add(subCol);
       }
     }
-    if (LOG.isTraceEnabled()) { 
-      LOG.trace("subcollections:" + Arrays.toString(collections.toArray())); 
+    if (LOG.isTraceEnabled()) {
+      LOG.trace("subcollections:" + Arrays.toString(collections.toArray()));
     }
-    
+
     return collections;
   }
 

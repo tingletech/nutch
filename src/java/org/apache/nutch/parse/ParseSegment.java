@@ -17,8 +17,8 @@
 
 package org.apache.nutch.parse;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.nutch.crawl.CrawlDatum;
 import org.apache.nutch.crawl.SignatureFactory;
@@ -26,7 +26,9 @@ import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapred.*;
 import org.apache.hadoop.util.*;
 import org.apache.hadoop.conf.*;
+import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.metadata.Nutch;
+import org.apache.nutch.net.protocols.Response;
 import org.apache.nutch.protocol.*;
 import org.apache.nutch.scoring.ScoringFilterException;
 import org.apache.nutch.scoring.ScoringFilters;
@@ -43,9 +45,13 @@ public class ParseSegment extends Configured implements Tool,
     Mapper<WritableComparable, Content, Text, ParseImpl>,
     Reducer<Text, Writable, Text, Writable> {
 
-  public static final Log LOG = LogFactory.getLog(ParseSegment.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ParseSegment.class);
+  
+  public static final String SKIP_TRUNCATED = "parser.skip.truncated";
   
   private ScoringFilters scfilters;
+  
+  private boolean skipTruncated;
   
   public ParseSegment() {
     this(null);
@@ -58,6 +64,7 @@ public class ParseSegment extends Configured implements Tool,
   public void configure(JobConf job) {
     setConf(job);
     this.scfilters = new ScoringFilters(job);
+    skipTruncated=job.getBoolean(SKIP_TRUNCATED, true);
   }
 
   public void close() {}
@@ -68,7 +75,7 @@ public class ParseSegment extends Configured implements Tool,
                   OutputCollector<Text, ParseImpl> output, Reporter reporter)
     throws IOException {
     // convert on the fly from old UTF8 keys
-    if (key instanceof UTF8) {
+    if (key instanceof Text) {
       newKey.set(key.toString());
       key = newKey;
     }
@@ -78,6 +85,10 @@ public class ParseSegment extends Configured implements Tool,
     if (status != CrawlDatum.STATUS_FETCH_SUCCESS) {
       // content not fetched successfully, skip document
       LOG.debug("Skipping " + key + " as content is not fetched successfully");
+      return;
+    }
+    
+    if (skipTruncated && isTruncated(content)) {
       return;
     }
 
@@ -93,9 +104,11 @@ public class ParseSegment extends Configured implements Tool,
       Text url = entry.getKey();
       Parse parse = entry.getValue();
       ParseStatus parseStatus = parse.getData().getStatus();
-      
+
+      long start = System.currentTimeMillis();
+
       reporter.incrCounter("ParserStatus", ParseStatus.majorCodes[parseStatus.getMajorCode()], 1);
-      
+
       if (!parseStatus.isSuccess()) {
         LOG.warn("Error parsing: " + key + ": " + parseStatus);
         parse = parseStatus.getEmptyParse(getConf());
@@ -115,13 +128,53 @@ public class ParseSegment extends Configured implements Tool,
         scfilters.passScoreAfterParsing(url, content, parse);
       } catch (ScoringFilterException e) {
         if (LOG.isWarnEnabled()) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
           LOG.warn("Error passing score: "+ url +": "+e.getMessage());
         }
       }
+
+      long end = System.currentTimeMillis();
+      LOG.info("Parsed (" + Long.toString(end - start) + "ms):" + url);
+
       output.collect(url, new ParseImpl(new ParseText(parse.getText()), 
                                         parse.getData(), parse.isCanonical()));
     }
+  }
+  
+  /**
+   * Checks if the page's content is truncated.
+   * @param content
+   * @return If the page is truncated <code>true</code>. When it is not,
+   * or when it could be determined, <code>false</code>. 
+   */
+  public static boolean isTruncated(Content content) {
+    byte[] contentBytes = content.getContent();
+    if (contentBytes == null) return false;
+    Metadata metadata = content.getMetadata();
+    if (metadata == null) return false;
+    
+    String lengthStr = metadata.get(Response.CONTENT_LENGTH);
+    if (lengthStr != null) lengthStr=lengthStr.trim();
+    if (StringUtil.isEmpty(lengthStr)) {
+      return false;
+    }
+    int inHeaderSize;
+    String url = content.getUrl();
+    try {
+      inHeaderSize = Integer.parseInt(lengthStr);
+    } catch (NumberFormatException e) {
+      LOG.warn("Wrong contentlength format for " + url, e);
+      return false;
+    }
+    int actualSize = contentBytes.length;
+    if (inHeaderSize > actualSize) {
+      LOG.info(url + " skipped. Content of size " + inHeaderSize
+          + " was truncated to " + actualSize);
+      return true;
+    }
+    if (LOG.isDebugEnabled()) {
+      LOG.debug(url + " actualSize=" + actualSize + " inHeaderSize=" + inHeaderSize);
+    }
+    return false;
   }
 
   public void reduce(Text key, Iterator<Writable> values,
@@ -167,12 +220,25 @@ public class ParseSegment extends Configured implements Tool,
   public int run(String[] args) throws Exception {
     Path segment;
 
-    String usage = "Usage: ParseSegment segment";
+    String usage = "Usage: ParseSegment segment [-noFilter] [-noNormalize]";
 
     if (args.length == 0) {
       System.err.println(usage);
       System.exit(-1);
-    }      
+    }
+
+    if(args.length > 1) {
+      for(int i = 1; i < args.length; i++) {
+        String param = args[i];
+
+        if("-nofilter".equalsIgnoreCase(param)) {
+          getConf().setBoolean("parse.filter.urls", false);
+        } else if ("-nonormalize".equalsIgnoreCase(param)) {
+          getConf().setBoolean("parse.normalize.urls", false);
+        }
+      }
+    }
+
     segment = new Path(args[0]);
     parse(segment);
     return 0;

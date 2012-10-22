@@ -18,11 +18,12 @@ package org.apache.nutch.crawl;
 
 import java.io.IOException;
 import java.net.UnknownHostException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataOutputStream;
 import org.apache.hadoop.fs.FileSystem;
@@ -38,7 +39,7 @@ import org.mortbay.jetty.handler.ResourceHandler;
 
 public class CrawlDBTestUtil {
 
-  private static final Log LOG = LogFactory.getLog(CrawlDBTestUtil.class);
+  private static final Logger LOG = LoggerFactory.getLogger(CrawlDBTestUtil.class);
 
   /**
    * Creates synthetic crawldb
@@ -74,6 +75,7 @@ public class CrawlDBTestUtil {
    * @return
    * @deprecated Use {@link #createConfiguration()} instead
    */
+  @Deprecated
   public static Configuration create(){
     return createConfiguration();
   }
@@ -103,22 +105,43 @@ public class CrawlDBTestUtil {
       this.datum = datum;
     }
   }
+
+  /**
+   * Generate seedlist
+   * @throws IOException 
+   */
+  public static void generateSeedList(FileSystem fs, Path urlPath, List<String> urls) throws IOException{
+    generateSeedList(fs, urlPath, urls, new ArrayList<String>());
+  }
   
   /**
    * Generate seedlist
    * @throws IOException 
    */
-  public static void generateSeedList(FileSystem fs, Path urlPath, List<String> contents) throws IOException{
+  public static void generateSeedList(FileSystem fs, Path urlPath, List<String> urls, List<String>metadata) throws IOException{
     FSDataOutputStream out;
     Path file=new Path(urlPath,"urls.txt");
     fs.mkdirs(urlPath);
     out=fs.create(file);
-    Iterator<String> iterator=contents.iterator();
-    while(iterator.hasNext()){
-      String url=iterator.next();
+    
+    Iterator<String> urls_i=urls.iterator();
+    Iterator<String> metadata_i=metadata.iterator();
+    
+    String url;
+    String md;
+    while(urls_i.hasNext()){
+      url=urls_i.next();
+
       out.writeBytes(url);
+            
+      if (metadata_i.hasNext()) {
+        md = metadata_i.next();
+        out.writeBytes(md);
+      }
+
       out.writeBytes("\n");
     }
+    
     out.flush();
     out.close();
   }

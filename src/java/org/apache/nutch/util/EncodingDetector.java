@@ -26,13 +26,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.net.protocols.Response;
 import org.apache.nutch.protocol.Content;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.NutchConfiguration;
 
 import com.ibm.icu.text.CharsetDetector;
@@ -104,7 +103,7 @@ public class EncodingDetector {
     }
   }
 
-  public static final Log LOG = LogFactory.getLog(EncodingDetector.class);
+  public static final Logger LOG = LoggerFactory.getLogger(EncodingDetector.class);
 
   public static final int NO_THRESHOLD = -1;
 
@@ -178,8 +177,7 @@ public class EncodingDetector {
           matches = detector.detectAll();
         }
       } catch (Exception e) {
-        LOG.debug("Exception from ICU4J (ignoring): ");
-        e.printStackTrace(LogUtil.getDebugStream(LOG));
+        LOG.debug("Exception from ICU4J (ignoring): ", e);
       }
 
       if (matches != null) {
@@ -307,11 +305,16 @@ public class EncodingDetector {
   }
 
   public static String resolveEncodingAlias(String encoding) {
-    if (encoding == null || !Charset.isSupported(encoding))
+    try {
+      if (encoding == null || !Charset.isSupported(encoding))
+        return null;
+      String canonicalName = new String(Charset.forName(encoding).name());
+      return ALIASES.containsKey(canonicalName) ? ALIASES.get(canonicalName)
+                                                : canonicalName;
+    } catch (Exception e) {
+      LOG.warn("Invalid encoding " + encoding + " detected, using default.");
       return null;
-    String canonicalName = new String(Charset.forName(encoding).name());
-    return ALIASES.containsKey(canonicalName) ? ALIASES.get(canonicalName)
-                                              : canonicalName;
+    }
   }
 
   /**

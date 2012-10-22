@@ -22,8 +22,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.hadoop.io.Text;
 
 /**
@@ -39,7 +39,7 @@ public class ParseResult implements Iterable<Map.Entry<Text, Parse>> {
   private Map<Text, Parse> parseMap;
   private String originalUrl;
   
-  public static final Log LOG = LogFactory.getLog(ParseResult.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ParseResult.class);
   
   /**
    * Create a container for parse results.
@@ -53,10 +53,10 @@ public class ParseResult implements Iterable<Map.Entry<Text, Parse>> {
   
   /**
    * Convenience method for obtaining {@link ParseResult} from a single
-   * {@link Parse} output.
-   * @param url canonical url
-   * @param parse single parse output
-   * @return result containing the single parse output
+   * <code>Parse</code> output.
+   * @param url canonical url.
+   * @param parse single parse output.
+   * @return result containing the single parse output.
    */
   public static ParseResult createParseResult(String url, Parse parse) {
     ParseResult parseResult = new ParseResult(url);
@@ -126,7 +126,7 @@ public class ParseResult implements Iterable<Map.Entry<Text, Parse>> {
   
   /**
    * Remove all results where status is not successful (as determined
-   * by {@link ParseStatus#isSuccess()}). Note that effects of this operation
+   * by </code>ParseStatus#isSuccess()</code>). Note that effects of this operation
    * cannot be reversed.
    */
   public void filter() {
@@ -142,7 +142,7 @@ public class ParseResult implements Iterable<Map.Entry<Text, Parse>> {
 
   /**
    * A convenience method which returns true only if all parses are successful.
-   * Parse success is determined by {@link ParseStatus#isSuccess()}
+   * Parse success is determined by <code>ParseStatus#isSuccess()</code>.
    */
   public boolean isSuccess() {
     for(Iterator<Entry<Text, Parse>> i = iterator(); i.hasNext();) {

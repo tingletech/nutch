@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.net.URI;
 import java.net.URLDecoder;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,7 +30,7 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
 
-import org.apache.commons.logging.Log;
+import org.slf4j.Logger;
 
 import org.apache.hadoop.conf.Configuration;
 import org.w3c.dom.Document;
@@ -49,7 +50,7 @@ public class PluginManifestParser {
   private static final String ATTR_CLASS = "class";
   private static final String ATTR_ID = "id";
 
-  public static final Log LOG = PluginRepository.LOG;
+  public static final Logger LOG = PluginRepository.LOG;
 
   private static final boolean WINDOWS = System.getProperty("os.name")
       .startsWith("Windows");
@@ -147,7 +148,7 @@ public class PluginManifestParser {
   private PluginDescriptor parseManifestFile(String pManifestPath)
       throws MalformedURLException, SAXException, IOException,
       ParserConfigurationException {
-    Document document = parseXML(new File(pManifestPath).toURL());
+    Document document = parseXML(new File(pManifestPath).toURI().toURL());
     String pPath = new File(pManifestPath).getParent();
     return parsePlugin(document, pPath);
   }

@@ -22,9 +22,9 @@ import java.net.*;
 import java.util.*;
 import java.text.*;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// rLogging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.conf.*;
@@ -57,10 +57,12 @@ import org.apache.nutch.util.URLUtil;
  **/
 public class Generator extends Configured implements Tool {
 
-  public static final Log LOG = LogFactory.getLog(Generator.class);
+  public static final Logger LOG = LoggerFactory.getLogger(Generator.class);
 
   public static final String GENERATE_UPDATE_CRAWLDB = "generate.update.crawldb";
   public static final String GENERATOR_MIN_SCORE = "generate.min.score";
+  public static final String GENERATOR_MIN_INTERVAL = "generate.min.interval";
+  public static final String GENERATOR_RESTRICT_STATUS = "generate.restrict.status";
   public static final String GENERATOR_FILTER = "generate.filter";
   public static final String GENERATOR_NORMALISE = "generate.normalise";
   public static final String GENERATOR_MAX_COUNT = "generate.max.count";
@@ -115,6 +117,7 @@ public class Generator extends Configured implements Tool {
     private long limit;
     private long count;
     private HashMap<String,int[]> hostCounts = new HashMap<String,int[]>();
+    private int segCounts[];
     private int maxCount;
     private boolean byDomain = false;
     private Partitioner<Text,Writable> partitioner = new URLPartitioner();
@@ -128,6 +131,8 @@ public class Generator extends Configured implements Tool {
     private long genDelay;
     private FetchSchedule schedule;
     private float scoreThreshold = 0f;
+    private int intervalThreshold = -1;
+    private String restrictStatus = null;
     private int maxNumSegments = 1;
     int currentsegmentnum = 1;
 
@@ -154,7 +159,10 @@ public class Generator extends Configured implements Tool {
       if (time > 0) genTime.set(time);
       schedule = FetchScheduleFactory.getFetchSchedule(job);
       scoreThreshold = job.getFloat(GENERATOR_MIN_SCORE, Float.NaN);
+      intervalThreshold = job.getInt(GENERATOR_MIN_INTERVAL, -1);
+      restrictStatus = job.get(GENERATOR_RESTRICT_STATUS, null);
       maxNumSegments = job.getInt(GENERATOR_MAX_NUM_SEGMENTS, 1);
+      segCounts = new int[maxNumSegments];
     }
 
     public void close() {}
@@ -200,8 +208,14 @@ public class Generator extends Configured implements Tool {
         }
       }
 
+      if (restrictStatus != null
+        && !restrictStatus.equalsIgnoreCase(CrawlDatum.getStatusName(crawlDatum.getStatus()))) return;
+
       // consider only entries with a score superior to the threshold
       if (scoreThreshold != Float.NaN && sort < scoreThreshold) return;
+
+      // consider only entries with a retry (or fetch) interval lower than threshold
+      if (intervalThreshold != -1 && crawlDatum.getFetchInterval() > intervalThreshold) return;
 
       // sort by decreasing score, using DecreasingFloatComparator
       sortValue.set(sort);
@@ -253,6 +267,7 @@ public class Generator extends Configured implements Tool {
         } catch (Exception e) {
           LOG.warn("Malformed URL: '" + urlString + "', skipping ("
               + StringUtils.stringifyException(e) + ")");
+          reporter.getCounter("Generator", "MALFORMED_URL").increment(1);
           continue;
         }
 
@@ -269,23 +284,33 @@ public class Generator extends Configured implements Tool {
           // increment hostCount
           hostCount[1]++;
 
+          // check if topN reached, select next segment if it is
+          while (segCounts[hostCount[0]-1] >= limit && hostCount[0] < maxNumSegments) {
+            hostCount[0]++;
+            hostCount[1] = 0;
+          }
+
           // reached the limit of allowed URLs per host / domain
           // see if we can put it in the next segment?
-          if (hostCount[1] > maxCount) {
+          if (hostCount[1] >= maxCount) {
             if (hostCount[0] < maxNumSegments) {
               hostCount[0]++;
               hostCount[1] = 0;
             } else {
               if (hostCount[1] == maxCount + 1 && LOG.isInfoEnabled()) {
                 LOG.info("Host or domain " + hostordomain + " has more than " + maxCount
-                    + " URLs for all " + maxNumSegments + " segments - skipping");
+                    + " URLs for all " + maxNumSegments + " segments. Additional URLs won't be included in the fetchlist.");
               }
               // skip this entry
               continue;
             }
           }
           entry.segnum = new IntWritable(hostCount[0]);
-        } else entry.segnum = new IntWritable(currentsegmentnum);
+          segCounts[hostCount[0]-1]++;
+        } else {
+          entry.segnum = new IntWritable(currentsegmentnum);
+          segCounts[currentsegmentnum-1]++;
+        }
 
         output.collect(key, entry);
 
@@ -693,7 +718,7 @@ public class Generator extends Configured implements Tool {
           norm, force, maxNumSegments);
       if (segs == null) return -1;
     } catch (Exception e) {
-      LOG.fatal("Generator: " + StringUtils.stringifyException(e));
+      LOG.error("Generator: " + StringUtils.stringifyException(e));
       return -1;
     }
     return 0;

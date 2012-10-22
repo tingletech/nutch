@@ -31,8 +31,8 @@ import org.xml.sax.SAXException;
 import org.w3c.dom.*;
 import org.apache.html.dom.*;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.nutch.metadata.Metadata;
 import org.apache.nutch.metadata.Nutch;
@@ -42,14 +42,16 @@ import org.apache.nutch.parse.*;
 import org.apache.nutch.util.*;
 
 public class HtmlParser implements Parser {
-  public static final Log LOG = LogFactory.getLog("org.apache.nutch.parse.html");
+  public static final Logger LOG = LoggerFactory.getLogger("org.apache.nutch.parse.html");
 
   // I used 1000 bytes at first, but  found that some documents have 
   // meta tag well past the first 1000 bytes. 
   // (e.g. http://cn.promo.yahoo.com/customcare/music.html)
   private static final int CHUNK_SIZE = 2000;
+
+  // NUTCH-1006 Meta equiv with single quotes not accepted
   private static Pattern metaPattern =
-    Pattern.compile("<meta\\s+([^>]*http-equiv=\"?content-type\"?[^>]*)>",
+    Pattern.compile("<meta\\s+([^>]*http-equiv=(\"|')?content-type(\"|')?[^>]*)>",
                     Pattern.CASE_INSENSITIVE);
   private static Pattern charsetPattern =
     Pattern.compile("charset=\\s*([a-z][_\\-0-9a-z]*)",
@@ -150,7 +152,7 @@ public class HtmlParser implements Parser {
     } catch (SAXException e) {
       return new ParseStatus(e).getEmptyParseResult(content.getUrl(), getConf());
     } catch (Exception e) {
-      e.printStackTrace(LogUtil.getWarnStream(LOG));
+      LOG.error("Error: ", e);
       return new ParseStatus(e).getEmptyParseResult(content.getUrl(), getConf());
     }
       
@@ -257,7 +259,9 @@ public class HtmlParser implements Parser {
         }
         res.appendChild(frag);
       }
-    } catch (Exception x) { x.printStackTrace(LogUtil.getWarnStream(LOG));};
+    } catch (Exception e) { 
+      LOG.error("Error: ", e);
+      };
     return res;
   }
   

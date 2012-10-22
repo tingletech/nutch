@@ -22,9 +22,9 @@ import java.net.MalformedURLException;
 import java.text.SimpleDateFormat;
 import java.util.Map.Entry;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Slf4j Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.fs.*;
@@ -47,7 +47,7 @@ import org.apache.nutch.util.*;
 /** The fetcher. Most of the work is done by plugins. */
 public class OldFetcher extends Configured implements Tool, MapRunnable<WritableComparable, Writable, Text, NutchWritable> { 
 
-  public static final Log LOG = LogFactory.getLog(OldFetcher.class);
+  public static final Logger LOG = LoggerFactory.getLogger(OldFetcher.class);
   
   public static final int PERM_REFRESH_TIME = 5;
 
@@ -130,9 +130,8 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
               break;                              // at eof, exit
             }
           } catch (IOException e) {
-            if (LOG.isFatalEnabled()) {
-              e.printStackTrace(LogUtil.getFatalStream(LOG));
-              LOG.fatal("fetcher caught:"+e.toString());
+            if (LOG.isErrorEnabled()) {
+              LOG.error("fetcher caught:"+e.toString());
             }
             break;
           }
@@ -253,9 +252,8 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
         }
 
       } catch (Throwable e) {
-        if (LOG.isFatalEnabled()) {
-          e.printStackTrace(LogUtil.getFatalStream(LOG));
-          LOG.fatal("fetcher caught:"+e.toString());
+        if (LOG.isErrorEnabled()) {
+          LOG.error("fetcher caught:"+e.toString());
         }
       } finally {
         synchronized (OldFetcher.this) {activeThreads--;} // count threads
@@ -327,7 +325,6 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
           scfilters.passScoreBeforeParsing(key, datum, content);
         } catch (Exception e) {
           if (LOG.isWarnEnabled()) {
-            e.printStackTrace(LogUtil.getWarnStream(LOG));
             LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
           }
         }
@@ -387,7 +384,6 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
               scfilters.passScoreAfterParsing(url, content, parse);
             } catch (Exception e) {
               if (LOG.isWarnEnabled()) {
-                e.printStackTrace(LogUtil.getWarnStream(LOG));
                 LOG.warn("Couldn't pass score, url " + key + " (" + e + ")");
               }
             }
@@ -397,9 +393,8 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
           }
         }
       } catch (IOException e) {
-        if (LOG.isFatalEnabled()) {
-          e.printStackTrace(LogUtil.getFatalStream(LOG));
-          LOG.fatal("fetcher caught:"+e.toString());
+        if (LOG.isErrorEnabled()) {
+          LOG.error("fetcher caught:"+e.toString());
         }
       }
 
@@ -570,7 +565,7 @@ public class OldFetcher extends Configured implements Tool, MapRunnable<Writable
       fetch(segment, threads);              // run the Fetcher
       return 0;
     } catch (Exception e) {
-      LOG.fatal("OldFetcher: " + StringUtils.stringifyException(e));
+      LOG.error("OldFetcher: " + StringUtils.stringifyException(e));
       return -1;
     }
 

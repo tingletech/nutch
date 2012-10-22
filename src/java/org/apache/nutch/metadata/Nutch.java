@@ -66,4 +66,9 @@ public interface Nutch {
   public static final String REPR_URL_KEY = "_repr_";
 
   public static final Text WRITABLE_REPR_URL_KEY = new Text(REPR_URL_KEY);
+
+  /** Used by AdaptiveFetchSchedule to maintain custom fetch interval */
+  public static final String FIXED_INTERVAL_KEY = "fixedInterval";
+
+  public static final Text WRITABLE_FIXED_INTERVAL_KEY = new Text(FIXED_INTERVAL_KEY);
 }

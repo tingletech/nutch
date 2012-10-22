@@ -25,6 +25,8 @@ public interface NutchIndexWriter {
 
   public void write(NutchDocument doc) throws IOException;
 
+  public void delete(String key) throws IOException;
+
   public void close() throws IOException;
 
 }

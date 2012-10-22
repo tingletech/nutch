@@ -24,8 +24,8 @@ import java.util.List;
 import java.util.Vector;
 
 // Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Hadoop imports
 import org.apache.hadoop.conf.Configuration;
@@ -35,7 +35,6 @@ import org.apache.nutch.plugin.Extension;
 import org.apache.nutch.plugin.ExtensionPoint;
 import org.apache.nutch.plugin.PluginRuntimeException;
 import org.apache.nutch.plugin.PluginRepository;
-import org.apache.nutch.util.LogUtil;
 import org.apache.nutch.util.MimeUtil;
 import org.apache.nutch.util.ObjectCache;
 
@@ -43,7 +42,7 @@ import org.apache.nutch.util.ObjectCache;
 /** Creates and caches {@link Parser} plugins.*/
 public final class ParserFactory {
   
-  public static final Log LOG = LogFactory.getLog(ParserFactory.class);
+  public static final Logger LOG = LoggerFactory.getLogger(ParserFactory.class);
   
   /** Wildcard for default plugins. */
   public static final String DEFAULT_PLUGIN = "*";
@@ -136,7 +135,6 @@ public final class ParserFactory {
         parsers.add(p);
       } catch (PluginRuntimeException e) {
         if (LOG.isWarnEnabled()) {
-          e.printStackTrace(LogUtil.getWarnStream(LOG));
           LOG.warn("ParserFactory:PluginRuntimeException when "
                  + "initializing parser plugin "
                  + ext.getDescriptor().getPluginId()
@@ -343,13 +341,12 @@ public final class ParserFactory {
       // NotMappedParserException
       
       for (int i=0; i<extensions.length; i++) {
-        if (extensions[i].getAttribute("contentType") != null
-            && extensions[i].getAttribute("contentType").equals(
-                contentType)) {
-          extList.add(extensions[i]);
-        }
-        else if ("*".equals(extensions[i].getAttribute("contentType"))){
+      	if ("*".equals(extensions[i].getAttribute("contentType"))){
           extList.add(0, extensions[i]);
+        }
+        else if (extensions[i].getAttribute("contentType") != null
+            && contentType.matches(escapeContentType(extensions[i].getAttribute("contentType")))) {
+          extList.add(extensions[i]);
         }
       }
       
@@ -377,10 +374,18 @@ public final class ParserFactory {
     
     return (extList.size() > 0) ? extList : null;
   }
+  
+  private String escapeContentType(String contentType) {
+  	// Escapes contentType in order to use as a regex 
+  	// (and keep backwards compatibility).
+  	// This enables to accept multiple types for a single parser. 
+  	return contentType.replace("+", "\\+").replace(".", "\\.");
+	}
 
   private boolean match(Extension extension, String id, String type) {
     return ((id.equals(extension.getId())) &&
-            (type.equals(extension.getAttribute("contentType")) || extension.getAttribute("contentType").equals("*") ||
+            (extension.getAttribute("contentType").equals("*") || 
+             type.matches(escapeContentType(extension.getAttribute("contentType"))) ||
              type.equals(DEFAULT_PLUGIN)));
   }
   

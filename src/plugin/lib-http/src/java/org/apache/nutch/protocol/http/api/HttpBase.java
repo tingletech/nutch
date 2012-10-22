@@ -20,9 +20,9 @@ package org.apache.nutch.protocol.http.api;
 import java.io.IOException;
 import java.net.URL;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 // Nutch imports
 import org.apache.nutch.crawl.CrawlDatum;
@@ -35,7 +35,7 @@ import org.apache.nutch.protocol.ProtocolStatus;
 import org.apache.nutch.protocol.RobotRules;
 import org.apache.nutch.util.GZIPUtils;
 import org.apache.nutch.util.DeflateUtils;
-import org.apache.nutch.util.LogUtil;
+
 
 // Hadoop imports
 import org.apache.hadoop.conf.Configuration;
@@ -71,17 +71,20 @@ public abstract class HttpBase implements Protocol {
   /** The Nutch 'User-Agent' request header */
   protected String userAgent = getAgentString(
                         "NutchCVS", null, "Nutch",
-                        "http://lucene.apache.org/nutch/bot.html",
-                        "nutch-agent@lucene.apache.org");
+                        "http://nutch.apache.org/bot.html",
+                        "agent@nutch.apache.org");
 
   /** The "Accept-Language" request header value. */
   protected String acceptLanguage = "en-us,en-gb,en;q=0.7,*;q=0.3";
-    
+
+  /** The "Accept" request header value. */
+  protected String accept = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+  
   /** The default logger */
-  private final static Log LOGGER = LogFactory.getLog(HttpBase.class);
+  private final static Logger LOGGER = LoggerFactory.getLogger(HttpBase.class);
 
   /** The specified logger */
-  private Log logger = LOGGER;
+  private Logger logger = LOGGER;
  
   /** The nutch configuration */
   private Configuration conf = null;
@@ -98,29 +101,30 @@ public abstract class HttpBase implements Protocol {
   }
   
   /** Creates a new instance of HttpBase */
-  public HttpBase(Log logger) {
+  public HttpBase(Logger logger) {
     if (logger != null) {
       this.logger = logger;
     }
     robots = new RobotRulesParser();
   }
   
-   // Inherited Javadoc
-    public void setConf(Configuration conf) {
-        this.conf = conf;
-        this.proxyHost = conf.get("http.proxy.host");
-        this.proxyPort = conf.getInt("http.proxy.port", 8080);
-        this.useProxy = (proxyHost != null && proxyHost.length() > 0);
-        this.timeout = conf.getInt("http.timeout", 10000);
-        this.maxContent = conf.getInt("http.content.limit", 64 * 1024);
-        this.userAgent = getAgentString(conf.get("http.agent.name"), conf.get("http.agent.version"), conf
-                .get("http.agent.description"), conf.get("http.agent.url"), conf.get("http.agent.email"));
-        this.acceptLanguage = conf.get("http.accept.language", acceptLanguage);
-        // backward-compatible default setting
-        this.useHttp11 = conf.getBoolean("http.useHttp11", false);
-        this.robots.setConf(conf);
-        logConf();
-    }
+  // Inherited Javadoc
+  public void setConf(Configuration conf) {
+      this.conf = conf;
+      this.proxyHost = conf.get("http.proxy.host");
+      this.proxyPort = conf.getInt("http.proxy.port", 8080);
+      this.useProxy = (proxyHost != null && proxyHost.length() > 0);
+      this.timeout = conf.getInt("http.timeout", 10000);
+      this.maxContent = conf.getInt("http.content.limit", 64 * 1024);
+      this.userAgent = getAgentString(conf.get("http.agent.name"), conf.get("http.agent.version"), conf
+              .get("http.agent.description"), conf.get("http.agent.url"), conf.get("http.agent.email"));
+      this.acceptLanguage = conf.get("http.accept.language", acceptLanguage);
+      this.accept = conf.get("http.accept", accept);
+      // backward-compatible default setting
+      this.useHttp11 = conf.getBoolean("http.useHttp11", false);
+      this.robots.setConf(conf);
+      logConf();
+  }
 
   // Inherited Javadoc
   public Configuration getConf() {
@@ -194,7 +198,7 @@ public abstract class HttpBase implements Protocol {
                 + u));
       }
     } catch (Throwable e) {
-      e.printStackTrace(LogUtil.getErrorStream(logger));
+      logger.error("Failed to get protocol output", e);
       return new ProtocolOutput(null, new ProtocolStatus(e));
     }
   }
@@ -235,6 +239,10 @@ public abstract class HttpBase implements Protocol {
          return acceptLanguage;
   }
 
+  public String getAccept() {
+         return accept;
+  }
+
   public boolean getUseHttp11() {
     return useHttp11;
   }
@@ -247,8 +255,8 @@ public abstract class HttpBase implements Protocol {
     
     if ( (agentName == null) || (agentName.trim().length() == 0) ) {
       // TODO : NUTCH-258
-      if (LOGGER.isFatalEnabled()) {
-        LOGGER.fatal("No User-Agent string set (http.agent.name)!");
+      if (LOGGER.isErrorEnabled()) {
+        LOGGER.error("No User-Agent string set (http.agent.name)!");
       }
     }
     
@@ -292,6 +300,7 @@ public abstract class HttpBase implements Protocol {
       logger.info("http.content.limit = " + maxContent);
       logger.info("http.agent = " + userAgent);
       logger.info("http.accept.language = " + acceptLanguage);
+      logger.info("http.accept = " + accept);
     }
   }
   

@@ -123,7 +123,7 @@
 
 <property>
   <name>http.agent.version</name>
-  <value>Nutch-1.3</value>
+  <value>Nutch-1.6-SNAPSHOT</value>
   <description>A version string to advertise in the User-Agent 
    header.</description>
 </property>
@@ -245,6 +245,13 @@
   <description>Value of the "Accept-Language" request header field.
   This allows selecting non-English language as default one to retrieve.
   It is a useful setting for search engines build for certain national group.
+  </description>
+</property>
+
+<property>
+  <name>http.accept</name>
+  <value>text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8</value>
+  <description>Value of the "Accept" request header field.
   </description>
 </property>
 
@@ -395,11 +402,35 @@
 </property>
 
 <property>
+  <name>db.fetch.schedule.mime.file</name>
+  <value>adaptive-mimetypes.txt</value>
+  <description>The configuration file for the MimeAdaptiveFetchSchedule.
+  </description>
+</property>
+
+<property>
   <name>db.update.additions.allowed</name>
   <value>true</value>
   <description>If true, updatedb will add newly discovered URLs, if false
   only already existing URLs in the CrawlDb will be updated and no new
   URLs will be added.
+  </description>
+</property>
+
+<property>
+  <name>db.preserve.backup</name>
+  <value>true</value>
+  <description>If true, updatedb will keep a backup of the previous CrawlDB
+  version in the old directory. In case of disaster, one can rename old to 
+  current and restore the CrawlDB to its previous state.
+  </description>
+</property>
+
+<property>
+  <name>db.update.purge.404</name>
+  <value>false</value>
+  <description>If true, updatedb will add purge records with status DB_GONE
+  from the CrawlDB.
   </description>
 </property>
 
@@ -427,6 +458,23 @@
   <description>If true, outlinks leading from a page to external hosts
   will be ignored. This is an effective way to limit the crawl to include
   only initially injected hosts, without creating complex URLFilters.
+  </description>
+</property>
+
+ <property>
+  <name>db.injector.overwrite</name>
+  <value>false</value>
+  <description>Whether existing records in the CrawlDB will be overwritten
+  by injected records.
+  </description>
+</property>
+
+<property>
+  <name>db.injector.update</name>
+  <value>false</value>
+  <description>If true existing records in the CrawlDB will be updated with
+  injected records. Old meta data is preserved. The db.injector.overwrite
+  parameter has precedence.
   </description>
 </property>
 
@@ -570,7 +618,22 @@
   fetchlist.  -1 if unlimited.</description>
 </property>
 
+<property>
+  <name>generate.min.score</name>
+  <value>0</value>
+  <description>Select only entries with a score larger than
+  generate.min.score.</description>
+</property>
+
+<property>
+  <name>generate.min.interval</name>
+  <value>-1</value>
+  <description>Select only entries with a retry interval lower than
+  generate.min.interval. A value of -1 disables this check.</description>
+</property>
+
 <!-- urlpartitioner properties -->
+
 <property>
   <name>partition.url.mode</name>
   <value>byHost</value>
@@ -583,10 +646,10 @@
   <name>crawl.gen.delay</name>
   <value>604800000</value>
   <description>
-   This value, expressed in days, defines how long we should keep the lock on records 
+   This value, expressed in milliseconds, defines how long we should keep the lock on records 
    in CrawlDb that were just selected for fetching. If these records are not updated 
-   in the meantime, the lock is canceled, i.e. the become eligible for selecting. 
-   Default value of this is 7 days.
+   in the meantime, the lock is canceled, i.e. they become eligible for selecting. 
+   Default value of this is 7 days (604800000 ms).
   </description>
 </property>
 
@@ -624,25 +687,29 @@
   <name>fetcher.threads.fetch</name>
   <value>10</value>
   <description>The number of FetcherThreads the fetcher should use.
-    This is also determines the maximum number of requests that are 
-    made at once (each FetcherThread handles one connection).</description>
+  This is also determines the maximum number of requests that are
+  made at once (each FetcherThread handles one connection). The total
+  number of threads running in distributed mode will be the number of
+  fetcher threads * number of nodes as fetcher has one map task per node.
+  </description>
 </property>
 
 <property>
-  <name>fetcher.threads.per.host</name>
+  <name>fetcher.threads.per.queue</name>
   <value>1</value>
   <description>This number is the maximum number of threads that
-    should be allowed to access a host at one time.</description>
+    should be allowed to access a queue at one time. Replaces 
+    deprecated parameter 'fetcher.threads.per.host'.
+   </description>
 </property>
 
 <property>
-  <name>fetcher.threads.per.host.by.ip</name>
-  <value>false</value>
-  <description>If true, then fetcher will count threads by IP address,
-  to which the URL's host name resolves. If false, only host name will be
-  used. NOTE: this should be set to the same value as
-  "generate.max.per.host.by.ip" - default settings are different only for
-  reasons of backward-compatibility.</description>
+  <name>fetcher.queue.mode</name>
+  <value>byHost</value>
+  <description>Determines how to put URLs into queues. Default value is 'byHost', 
+  also takes 'byDomain' or 'byIP'. Replaces the deprecated parameter 
+  'fetcher.threads.per.host.by.ip'.
+  </description>
 </property>
 
 <property>
@@ -683,6 +750,89 @@
   </description>
 </property>
 
+<property>
+  <name>fetcher.throughput.threshold.pages</name>
+  <value>-1</value>
+  <description>The threshold of minimum pages per second. If the fetcher downloads less
+  pages per second than the configured threshold, the fetcher stops, preventing slow queue's
+  from stalling the throughput. This threshold must be an integer. This can be useful when
+  fetcher.timelimit.mins is hard to determine. The default value of -1 disables this check.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.throughput.threshold.retries</name>
+  <value>5</value>
+  <description>The number of times the fetcher.throughput.threshold is allowed to be exceeded.
+  This settings prevents accidental slow downs from immediately killing the fetcher thread.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.throughput.threshold.check.after</name>
+  <value>5</value>
+  <description>The number of minutes after which the throughput check is enabled.</description>
+</property>
+
+<property>
+  <name>fetcher.threads.timeout.divisor</name>
+  <value>2</value>
+  <description>(EXPERT)The thread time-out divisor to use. By default threads have a time-out
+  value of mapred.task.timeout / 2. Increase this setting if the fetcher waits too
+  long before killing hanged threads. Be careful, a too high setting (+8) will most likely kill the
+  fetcher threads prematurely.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.queue.depth.multiplier</name>
+  <value>50</value>
+  <description>(EXPERT)The fetcher buffers the incoming URLs into queues based on the [host|domain|IP]
+  (see param fetcher.queue.mode). The depth of the queue is the number of threads times the value of this parameter.
+  A large value requires more memory but can improve the performance of the fetch when the order of the URLS in the fetch list
+  is not optimal.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.follow.outlinks.depth</name>
+  <value>-1</value>
+  <description>(EXPERT)When fetcher.parse is true and this value is greater than 0 the fetcher will extract outlinks
+  and follow until the desired depth is reached. A value of 1 means all generated pages are fetched and their first degree
+  outlinks are fetched and parsed too. Be careful, this feature is in itself agnostic of the state of the CrawlDB and does not
+  know about already fetched pages. A setting larger than 2 will most likely fetch home pages twice in the same fetch cycle.
+  It is highly recommended to set db.ignore.external.links to true to restrict the outlink follower to URL's within the same
+  domain. When disabled (false) the feature is likely to follow duplicates even when depth=1.
+  A value of -1 of 0 disables this feature.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.follow.outlinks.num.links</name>
+  <value>4</value>
+  <description>(EXPERT)The number of outlinks to follow when fetcher.follow.outlinks.depth is enabled. Be careful, this can multiply
+  the total number of pages to fetch. This works with fetcher.follow.outlinks.depth.divisor, by default settings the followed outlinks
+  at depth 1 is 8, not 4.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.follow.outlinks.depth.divisor</name>
+  <value>2</value>
+  <description>(EXPERT)The divisor of fetcher.follow.outlinks.num.links per fetcher.follow.outlinks.depth. This decreases the number
+  of outlinks to follow by increasing depth. The formula used is: outlinks = floor(divisor / depth * num.links). This prevents
+  exponential growth of the fetch list.
+  </description>
+</property>
+
+<property>
+  <name>fetcher.follow.outlinks.ignore.external</name>
+  <value>true</value>  
+  <description>Whether to ignore or follow external links. Set db.ignore.external.links to false and this to true to store outlinks
+  in the output but not follow them. If db.ignore.external.links is true this directive is ignored.
+  </description>
+</property>
+
 <!-- moreindexingfilter plugin properties -->
 
 <property>
@@ -691,6 +841,27 @@
   <description>Determines whether the index-more plugin will split the mime-type
   in sub parts, this requires the type field to be multi valued. Set to true for backward
   compatibility. False will not split the mime-type.
+  </description>
+</property>
+
+<property>
+  <name>moreIndexingFilter.mapMimeTypes</name>
+  <value>false</value>
+  <description>Determines whether MIME-type mapping is enabled. It takes a
+  plain text file with mapped MIME-types. With it the user can map both
+  application/xhtml+xml and text/html to the same target MIME-type so it
+  can be treated equally in an index. See conf/contenttype-mapping.txt.
+  </description>
+</property>
+
+<!-- AnchorIndexing filter plugin properties -->
+
+<property>
+  <name>anchorIndexingFilter.deduplicate</name>
+  <value>false</value>
+  <description>With this enabled the indexer will case-insensitive deduplicate anchors
+  before indexing. This prevents possible hundreds or thousands of identical anchors for
+  a given page to be indexed but will affect the search scoring (i.e. tf=1.0f).
   </description>
 </property>
 
@@ -730,6 +901,27 @@
   </description>
 </property>
 
+<property>
+  <name>indexer.max.content.length</name>
+  <value>-1</value>
+  <description>The maximum number of characters of a content that are indexed.
+  Content beyond the limit is truncated. A value of -1 disables this check.
+  </description>
+</property>
+
+<property>
+  <name>indexer.add.domain</name>
+  <value>false</value>
+  <description>Whether to add the domain field to a NutchDocument.</description>
+</property>
+
+<property>
+  <name>indexer.skip.notmodified</name>
+  <value>false</value>
+  <description>Whether the indexer will skip records with a db_notmodified status.
+  </description>
+</property>
+
 <!-- URL normalizer properties -->
 
 <property>
@@ -759,12 +951,16 @@
 
 <!-- mime properties -->
 
+<!--
 <property>
   <name>mime.types.file</name>
   <value>tika-mimetypes.xml</value>
   <description>Name of file in CLASSPATH containing filename extension and
-  magic sequence to mime types mapping information</description>
+  magic sequence to mime types mapping information. Overrides the default Tika config 
+  if specified.
+  </description>
 </property>
+-->
 
 <property>
   <name>mime.type.magic</name>
@@ -859,7 +1055,6 @@
   "all" doesn't show either content or summaries.</description>
 </property>
 
-
 <property>
   <name>parser.html.impl</name>
   <value>neko</value>
@@ -888,6 +1083,13 @@
 </property>
 
 <property>
+  <name>parser.fix.embeddedparams</name>
+  <value>true</value>
+  <description>Whether to fix URL embedded params using semi-colons.
+  See NUTCH-436 and NUTCH-1115</description>
+</property>
+
+<property>
   <name>htmlparsefilter.order</name>
   <value></value>
   <description>The order by which HTMLParse filters are applied.
@@ -907,6 +1109,26 @@
   moves on the the following documents. This parameter is applied to any Parser implementation. 
   Set to -1 to deactivate, bearing in mind that this could cause
   the parsing to crash because of a very long or corrupted document.
+  </description>
+</property>
+
+<property>
+  <name>parse.filter.urls</name>
+  <value>true</value>
+  <description>Whether the parser will filter URLs (with the configured URL filters).</description>
+</property>
+
+<property>
+  <name>parse.normalize.urls</name>
+  <value>true</value>
+  <description>Whether the parser will normalize URLs (with the configured URL normalizers).</description>
+</property>
+
+<property>
+  <name>parser.skip.truncated</name>
+  <value>true</value>
+  <description>Boolean value for whether we should skip parsing for truncated documents. By default this 
+  property is activated due to extremely high levels of CPU which parsing can sometimes take.  
   </description>
 </property>
 
@@ -979,34 +1201,92 @@
 <!-- language-identifier plugin properties -->
 
 <property>
-  <name>lang.ngram.min.length</name>
-  <value>1</value>
-  <description> The minimum size of ngrams to uses to identify
-  language (must be between 1 and lang.ngram.max.length).
-  The larger is the range between lang.ngram.min.length and
-  lang.ngram.max.length, the better is the identification, but
-  the slowest it is.
-  </description>
-</property>
-
-<property>
-  <name>lang.ngram.max.length</name>
-  <value>4</value>
-  <description> The maximum size of ngrams to uses to identify
-  language (must be between lang.ngram.min.length and 4).
-  The larger is the range between lang.ngram.min.length and
-  lang.ngram.max.length, the better is the identification, but
-  the slowest it is.
-  </description>
-</property>
-
-<property>
   <name>lang.analyze.max.length</name>
   <value>2048</value>
   <description> The maximum bytes of data to uses to indentify
   the language (0 means full content analysis).
   The larger is this value, the better is the analysis, but the
   slowest it is.
+  </description>
+</property>
+
+<property>
+  <name>lang.extraction.policy</name>
+  <value>detect,identify</value>
+  <description>This determines when the plugin uses detection and
+  statistical identification mechanisms. The order in which the
+  detect and identify are written will determine the extraction
+  policy. Default case (detect,identify)  means the plugin will
+  first try to extract language info from page headers and metadata,
+  if this is not successful it will try using tika language
+  identification. Possible values are:
+    detect
+    identify
+    detect,identify
+    identify,detect
+  </description>
+</property>
+
+<property>
+  <name>lang.identification.only.certain</name>
+  <value>false</value>
+  <description>If set to true with lang.extraction.policy containing identify,
+  the language code returned by Tika will be assigned to the document ONLY
+  if it is deemed certain by Tika.
+  </description>
+</property>
+
+<!-- index-static plugin properties -->
+
+<property>
+  <name>index.static</name>
+  <value></value>
+  <description>
+  A simple plugin called at indexing that adds fields with static data. 
+  You can specify a list of fieldname:fieldcontent per nutch job.
+  It can be useful when collections can't be created by urlpatterns, 
+  like in subcollection, but on a job-basis.
+  </description>
+</property>
+
+<!-- index-metadata plugin properties -->
+
+<property>
+  <name>index.parse.md</name>
+  <value>metatag.description,metatag.keywords</value>
+  <description>
+  Comma-separated list of keys to be taken from the parse metadata to generate fields.
+  Can be used e.g. for 'description' or 'keywords' provided that these values are generated
+  by a parser (see parse-metatags plugin)  
+  </description>
+</property>
+
+<property>
+  <name>index.content.md</name>
+  <value></value>
+  <description>
+   Comma-separated list of keys to be taken from the content metadata to generate fields. 
+  </description>
+</property>
+
+<property>
+  <name>index.db.md</name>
+  <value></value>
+  <description>
+     Comma-separated list of keys to be taken from the crawldb metadata to generate fields.
+     Can be used to index values propagated from the seeds with the plugin urlmeta 
+  </description>
+</property>
+
+<!-- parse-metatags plugin properties -->
+<property>
+  <name>metatags.names</name>
+  <value>description;keywords</value>
+  <description> Names of the metatags to extract, separated by;. 
+  Use '*' to extract all metatags. Prefixes the names with 'metatag.'
+  in the parse-metadata. For instance to index description and keywords, 
+  you need to activate the plugin index-metadata and set the value of the 
+  parameter 'index.parse.md' to 'metatag.description;metatag.keywords'.
   </description>
 </property>
 
@@ -1023,6 +1303,77 @@
   </description>
 </property>
 
+<!-- linkrank scoring properties -->
+
+<property>
+  <name>link.ignore.internal.host</name>
+  <value>true</value>
+  <description>Ignore outlinks to the same hostname.</description>
+</property>
+
+<property>
+  <name>link.ignore.internal.domain</name>
+  <value>true</value>
+  <description>Ignore outlinks to the same domain.</description>
+</property>
+
+<property>
+  <name>link.ignore.limit.page</name>
+  <value>true</value>
+  <description>Limit to only a single outlink to the same page.</description>
+</property>
+
+<property>
+  <name>link.ignore.limit.domain</name>
+  <value>true</value>
+  <description>Limit to only a single outlink to the same domain.</description>
+</property> 
+
+<property>
+  <name>link.analyze.num.iterations</name>
+  <value>10</value>
+  <description>The number of LinkRank iterations to run.</description>
+</property>
+
+<property>
+  <name>link.analyze.initial.score</name>
+  <value>1.0f</value>
+  <description>The initial score.</description>
+</property>
+
+<property>
+  <name>link.analyze.damping.factor</name>
+  <value>0.85f</value>
+  <description>The damping factor.</description>
+</property>
+
+<property>
+  <name>link.delete.gone</name>
+  <value>false</value>
+  <description>Whether to delete gone pages from the web graph.</description>
+</property>
+
+<property> 
+  <name>link.loops.depth</name>
+  <value>2</value>
+  <description>The depth for the loops algorithm.</description>
+</property>
+
+<property>
+  <name>link.score.updater.clear.score</name>
+  <value>0.0f</value>
+  <description>The default score for URL's that are not in the web graph.</description>
+</property>
+
+<property>
+  <name>mapreduce.fileoutputcommitter.marksuccessfuljobs</name>
+  <value>false</value>
+  <description>Hadoop >= 0.21 generates SUCCESS files in the output which can crash 
+  the readers. This should not be an issue once Nutch is ported to the new MapReduce API
+  but for now this parameter should prevent such cases.
+  </description>
+</property>
+
 <!-- solr index properties -->
 
 <property>
@@ -1036,12 +1387,40 @@
 
 <property> 
   <name>solr.commit.size</name>
-  <value>1000</value>
+  <value>250</value>
   <description>
   Defines the number of documents to send to Solr in a single update batch.
   Decrease when handling very large documents to prevent Nutch from running
-  out of memory.
-  </description>  
-</property> 
+  out of memory. NOTE: It does not explicitly trigger a server side commit.
+  </description>
+</property>
+
+<property>
+  <name>solr.commit.index</name>
+  <value>true</value>
+  <description>
+  When closing the indexer, trigger a commit to the Solr server. 
+  </description>
+</property>
+
+<property>
+  <name>solr.auth</name>
+  <value>false</value>
+  <description>
+  Whether to enable HTTP basic authentication for communicating with Solr.
+  Use the solr.auth.username and solr.auth.password properties to configure
+  your credentials.
+  </description>
+</property>
+
+<!-- subcollection properties -->
+
+<property>
+  <name>subcollection.default.field</name>
+  <value>subcollection</value>
+  <description>
+  The default field name for the subcollections.
+  </description>
+</property>
 
 </configuration>

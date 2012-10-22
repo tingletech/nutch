@@ -23,9 +23,9 @@ import java.util.List;
 import java.util.Map.Entry;
 import java.io.IOException;
 
-// Commons Logging imports
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+// Logging imports
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.hadoop.io.*;
 import org.apache.hadoop.mapred.*;
@@ -36,7 +36,7 @@ import org.apache.nutch.scoring.ScoringFilters;
 
 /** Merge new page entries with existing entries. */
 public class CrawlDbReducer implements Reducer<Text, CrawlDatum, Text, CrawlDatum> {
-  public static final Log LOG = LogFactory.getLog(CrawlDbReducer.class);
+  public static final Logger LOG = LoggerFactory.getLogger(CrawlDbReducer.class);
   
   private int retryMax;
   private CrawlDatum result = new CrawlDatum();
@@ -151,6 +151,7 @@ public class CrawlDbReducer implements Reducer<Text, CrawlDatum, Text, CrawlDatu
     if (!fetchSet) {
       if (oldSet) {// at this point at least "old" should be present
         output.collect(key, old);
+        reporter.getCounter("CrawlDB status", CrawlDatum.getStatusName(old.getStatus())).increment(1);
       } else {
         LOG.warn("Missing fetch and old value, signature=" + signature);
       }
@@ -291,6 +292,7 @@ public class CrawlDbReducer implements Reducer<Text, CrawlDatum, Text, CrawlDatu
     // remove generation time, if any
     result.getMetaData().remove(Nutch.WRITABLE_GENERATE_TIME_KEY);
     output.collect(key, result);
+    reporter.getCounter("CrawlDB status", CrawlDatum.getStatusName(result.getStatus())).increment(1);
   }
   
 }

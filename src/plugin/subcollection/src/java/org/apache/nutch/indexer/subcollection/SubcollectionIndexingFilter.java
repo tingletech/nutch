@@ -20,8 +20,8 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.io.Text;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.nutch.parse.Parse;
 import org.apache.nutch.util.NutchConfiguration;
@@ -31,11 +31,14 @@ import org.apache.nutch.indexer.IndexingException;
 import org.apache.nutch.indexer.NutchDocument;
 
 import org.apache.nutch.collection.CollectionManager;
+import org.apache.nutch.collection.Subcollection;
 import org.apache.nutch.crawl.CrawlDatum;
 import org.apache.nutch.crawl.Inlinks;
 
 
 public class SubcollectionIndexingFilter extends Configured implements IndexingFilter {
+
+  private Configuration conf;
 
   public SubcollectionIndexingFilter(){
     super(NutchConfiguration.create());
@@ -44,16 +47,32 @@ public class SubcollectionIndexingFilter extends Configured implements IndexingF
   public SubcollectionIndexingFilter(Configuration conf) {
     super(conf);
   }
+  
+  /**
+   * @param Configuration conf
+   */
+  public void setConf(Configuration conf) {
+    this.conf = conf;
+    fieldName = conf.get("subcollection.default.fieldname", "subcollection");
+  }
 
+  /**
+   * @return Configuration
+   */
+  public Configuration getConf() {
+    return this.conf;
+  }
+
+  
   /**
    * Doc field name
    */
-  public static final String FIELD_NAME = "subcollection";
+  public static String fieldName = "subcollection";
 
   /**
    * Logger
    */
-  public static final Log LOG = LogFactory.getLog(SubcollectionIndexingFilter.class);
+  public static final Logger LOG = LoggerFactory.getLogger(SubcollectionIndexingFilter.class);
 
   /**
    * "Mark" document to be a part of subcollection
@@ -62,8 +81,12 @@ public class SubcollectionIndexingFilter extends Configured implements IndexingF
    * @param url
    */
   private void addSubCollectionField(NutchDocument doc, String url) {
-    for (String collname: CollectionManager.getCollectionManager(getConf()).getSubCollections(url)) {
-      doc.add(FIELD_NAME, collname);
+    for (Subcollection coll : CollectionManager.getCollectionManager(getConf()).getSubCollections(url)) {
+      if (coll.getKey() == null) {
+        doc.add(fieldName, coll.getName());
+      } else {
+        doc.add(coll.getKey(), coll.getName());
+      }
     }
   }
 

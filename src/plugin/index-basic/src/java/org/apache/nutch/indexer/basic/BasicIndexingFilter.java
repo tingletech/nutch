@@ -17,8 +17,8 @@
 
 package org.apache.nutch.indexer.basic;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import org.apache.nutch.metadata.Nutch;
 import org.apache.nutch.parse.Parse;
@@ -26,6 +26,7 @@ import org.apache.nutch.parse.Parse;
 import org.apache.nutch.indexer.IndexingFilter;
 import org.apache.nutch.indexer.IndexingException;
 import org.apache.nutch.indexer.NutchDocument;
+import org.apache.nutch.util.URLUtil;
 import org.apache.hadoop.io.Text;
 
 import org.apache.nutch.crawl.CrawlDatum;
@@ -39,9 +40,11 @@ import org.apache.hadoop.conf.Configuration;
 
 /** Adds basic searchable fields to a document. */
 public class BasicIndexingFilter implements IndexingFilter {
-  public static final Log LOG = LogFactory.getLog(BasicIndexingFilter.class);
+  public static final Logger LOG = LoggerFactory.getLogger(BasicIndexingFilter.class);
 
   private int MAX_TITLE_LENGTH;
+  private int MAX_CONTENT_LENGTH;
+  private boolean addDomain = false;
   private Configuration conf;
 
   public NutchDocument filter(NutchDocument doc, Parse parse, Text url, CrawlDatum datum, Inlinks inlinks)
@@ -59,6 +62,11 @@ public class BasicIndexingFilter implements IndexingFilter {
       } else {
         u = new URL(urlString);
       }
+      
+      if (addDomain) {
+        doc.add("domain", URLUtil.getDomainName(u));
+      }
+      
       host = u.getHost();
     } catch (MalformedURLException e) {
       throw new IndexingException(e);
@@ -66,25 +74,34 @@ public class BasicIndexingFilter implements IndexingFilter {
 
     if (host != null) {
       doc.add("host", host);
-      doc.add("site", host);
     }
 
     doc.add("url", reprUrlString == null ? urlString : reprUrlString);
-    doc.add("content", parse.getText());
-    
+
+    // content
+    String content = parse.getText();
+    if (MAX_CONTENT_LENGTH > -1 && content.length() > MAX_CONTENT_LENGTH) {
+      content = content.substring(0, MAX_CONTENT_LENGTH);
+    }
+    doc.add("content", content);
+
     // title
     String title = parse.getData().getTitle();
     if (title.length() > MAX_TITLE_LENGTH) {      // truncate title if needed
       title = title.substring(0, MAX_TITLE_LENGTH);
     }
-    doc.add("title", title);
+
+    if (title.length() > 0) {
+      // NUTCH-1004 Do not index empty values for title field
+      doc.add("title", title);
+    }
 
     // add cached content/summary display policy, if available
     String caching = parse.getData().getMeta(Nutch.CACHING_FORBIDDEN_KEY);
     if (caching != null && !caching.equals(Nutch.CACHING_FORBIDDEN_NONE)) {
       doc.add("cache", caching);
     }
-    
+
     // add timestamp when fetched, for deduplication
     doc.add("tstamp", new Date(datum.getFetchTime()));
 
@@ -94,6 +111,8 @@ public class BasicIndexingFilter implements IndexingFilter {
   public void setConf(Configuration conf) {
     this.conf = conf;
     this.MAX_TITLE_LENGTH = conf.getInt("indexer.max.title.length", 100);
+    this.addDomain = conf.getBoolean("indexer.add.domain", false);
+    this.MAX_CONTENT_LENGTH = conf.getInt("indexer.max.content.length", -1);
   }
 
   public Configuration getConf() {
